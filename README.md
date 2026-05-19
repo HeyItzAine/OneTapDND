@@ -13,13 +13,17 @@ The app adds a custom Quick Settings DND tile. Tap to toggle DND.
 3. Add the tile to your Quick Settings panel (on Android 13+, the app can do this for you with a button, but on older versions, swipe down then tap the pencil/edit icon, and drag the DND tile in)
 
 
-## Permissions
+## Permissions & Privacy
 
 This app requires exactly **one** permission:
 
 - **Do Not Disturb access** (`ACCESS_NOTIFICATION_POLICY`): needed to read and toggle your DND state
 
 The app doesn't require internet access, doesn't collect data, stores nothing, and contains no ads/tracking.
+
+[VirusTotal scan](https://www.virustotal.com/gui/file/56b6c197c37a3d95ffb5ef6b8bc6c96091fe7d2ecdc717a8399261e419e65e56)
+SHA-256 `56b6c197c37a3d95ffb5ef6b8bc6c96091fe7d2ecdc717a8399261e419e65e56`
+
 
 ## Install
 
