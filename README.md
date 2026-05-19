@@ -6,6 +6,8 @@ Google removed the one-tap Do Not Disturb toggle from Quick Settings in Android 
 
 The app adds a custom Quick Settings DND tile. Tap to toggle DND.
 
+![screenshot](assets/Screenshot.png)
+
 ## Setup
 
 1. Install the app
