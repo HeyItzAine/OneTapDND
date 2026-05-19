@@ -1,6 +1,6 @@
 # One Tap DND
 
-Google removed the one-tap Do Not Disturb toggle from Quick Settings in Android 15, replacing it with a "Modes" panel that takes two taps. This app brings back the original behavior — a single tap to turn DND on or off, right from your Quick Settings.
+Google removed the one-tap Do Not Disturb toggle from Quick Settings in Android 15, replacing it with a "Modes" panel that takes two taps. This app brings back the original behavior: a single tap to turn DND on or off, right from your Quick Settings.
 
 ## How it works
 
@@ -9,7 +9,7 @@ The app adds a custom Quick Settings tile called "Do Not Disturb". Tap it once t
 ## Setup
 
 1. Install the app
-2. Open it and tap **Grant DND Access** — this takes you to a system settings page where you toggle permission for the app
+2. Open it and tap **Grant DND Access** (this takes you to a system settings page where you toggle permission for the app)
 3. Add the tile to your Quick Settings panel (on Android 13+, the app can do this for you with a button; on older versions, swipe down, tap the pencil/edit icon, and drag the "Do Not Disturb" tile in)
 4. Done. You can close the app — the tile works independently
 
@@ -17,7 +17,7 @@ The app adds a custom Quick Settings tile called "Do Not Disturb". Tap it once t
 
 This app requires exactly **one** permission:
 
-- **Do Not Disturb access** (`ACCESS_NOTIFICATION_POLICY`) — needed to read and toggle your DND state
+- **Do Not Disturb access** (`ACCESS_NOTIFICATION_POLICY`): needed to read and toggle your DND state
 
 That's the only permission. The app:
 - Has no internet access

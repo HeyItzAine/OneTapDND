@@ -4,6 +4,7 @@ import android.app.NotificationManager
 import android.app.StatusBarManager
 import android.content.ComponentName
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -12,6 +13,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,6 +27,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,20 +44,29 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.onetapdnd.ui.theme.OneTapDNDTheme
 
+enum class IconStyle { BLACK, WHITE }
+
 class MainActivity : ComponentActivity() {
 
     private var permissionGranted by mutableStateOf(false)
+    private var selectedIcon by mutableStateOf(IconStyle.BLACK)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        selectedIcon = currentIconStyle()
         enableEdgeToEdge()
         setContent {
             OneTapDNDTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     SetupScreen(
                         permissionGranted = permissionGranted,
+                        selectedIcon = selectedIcon,
                         onGrantPermission = { openDndPermissionSettings() },
                         onAddTile = { requestTileAddition() },
+                        onIconStyleSelected = { style ->
+                            selectedIcon = style
+                            applyIconStyle(style)
+                        },
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
@@ -67,8 +81,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openDndPermissionSettings() {
-        val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
-        startActivity(intent)
+        startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
     }
 
     private fun requestTileAddition() {
@@ -79,16 +92,46 @@ class MainActivity : ComponentActivity() {
                 getString(R.string.tile_label),
                 android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_dnd),
                 mainExecutor
-            ) { /* result ignored - system handles UI feedback */ }
+            ) { }
         }
+    }
+
+    private fun currentIconStyle(): IconStyle {
+        val pm = packageManager
+        val whiteEnabled = pm.getComponentEnabledSetting(
+            ComponentName(this, ".MainActivityWhiteIcon")
+        ) == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+        return if (whiteEnabled) IconStyle.WHITE else IconStyle.BLACK
+    }
+
+    private fun applyIconStyle(style: IconStyle) {
+        val pm = packageManager
+        val blackAlias = ComponentName(this, ".MainActivityBlackIcon")
+        val whiteAlias = ComponentName(this, ".MainActivityWhiteIcon")
+        val (enableAlias, disableAlias) = when (style) {
+            IconStyle.BLACK -> blackAlias to whiteAlias
+            IconStyle.WHITE -> whiteAlias to blackAlias
+        }
+        pm.setComponentEnabledSetting(
+            enableAlias,
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+            PackageManager.DONT_KILL_APP
+        )
+        pm.setComponentEnabledSetting(
+            disableAlias,
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+            PackageManager.DONT_KILL_APP
+        )
     }
 }
 
 @Composable
 fun SetupScreen(
     permissionGranted: Boolean,
+    selectedIcon: IconStyle,
     onGrantPermission: () -> Unit,
     onAddTile: () -> Unit,
+    onIconStyleSelected: (IconStyle) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -158,6 +201,31 @@ fun SetupScreen(
                     enabled = permissionGranted
                 ) {
                     Text(stringResource(R.string.add_tile))
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Icon style picker
+        SetupCard(
+            title = stringResource(R.string.icon_style_title),
+            description = stringResource(R.string.icon_style_description)
+        ) {
+            val options = listOf(IconStyle.BLACK, IconStyle.WHITE)
+            val labels = listOf(
+                stringResource(R.string.icon_black),
+                stringResource(R.string.icon_white)
+            )
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                options.forEachIndexed { index, style ->
+                    SegmentedButton(
+                        selected = selectedIcon == style,
+                        onClick = { onIconStyleSelected(style) },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size)
+                    ) {
+                        Text(labels[index])
+                    }
                 }
             }
         }

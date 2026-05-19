@@ -8,22 +8,49 @@
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="false"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@mipmap/ic_launcher_black"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@mipmap/ic_launcher_black_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.OneTapDND"
         tools:targetApi="31">
+
+        <!-- Main activity: not exported directly, launched via aliases below -->
         <activity
             android:name=".MainActivity"
-            android:exported="true"
+            android:exported="false"
             android:label="@string/app_name"
-            android:theme="@style/Theme.OneTapDND">
+            android:theme="@style/Theme.OneTapDND" />
+
+        <!-- Alias for black (light mode) icon — enabled by default -->
+        <activity-alias
+            android:name=".MainActivityBlackIcon"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_black"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_black_round"
+            android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <!-- Alias for white (dark mode) icon — disabled by default -->
+        <activity-alias
+            android:name=".MainActivityWhiteIcon"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_white"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_white_round"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <service
             android:name=".DndTileService"

@@ -19,4 +19,9 @@
 
     <string name="done_title">You\'re all set!</string>
     <string name="done_description">You can now toggle Do Not Disturb with a single tap from your Quick Settings. You can safely close this app \u2014 the tile works on its own.</string>
+
+    <string name="icon_style_title">App Icon Style</string>
+    <string name="icon_style_description">Choose the icon that looks best on your home screen.</string>
+    <string name="icon_black">Black (light backgrounds)</string>
+    <string name="icon_white">White (dark backgrounds)</string>
 </resources>
