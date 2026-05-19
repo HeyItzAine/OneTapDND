@@ -1,0 +1,24 @@
+*.iml
+.gradle/
+.idea/
+local.properties
+/build
+*/build
+/captures
+.externalNativeBuild/
+.cxx/
+.DS_Store
+
+# Signing keys
+*.jks
+*.keystore
+
+# Environment
+.env
+
+# Claude
+.claude/
+
+# Release artifacts (built locally)
+*.apk
+*.aab

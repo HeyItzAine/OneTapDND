@@ -1,0 +1,22 @@
+<resources>
+    <string name="app_name">One Tap DND</string>
+    <string name="tile_label">Do Not Disturb</string>
+    <string name="tile_on">On</string>
+    <string name="tile_off">Off</string>
+    <string name="tile_tap_to_setup">Tap to set up</string>
+
+    <string name="setup_title">One Tap DND</string>
+    <string name="setup_description">Bring back the one-tap Do Not Disturb toggle in your Quick Settings panel.</string>
+
+    <string name="step1_title">Step 1: Grant Permission</string>
+    <string name="step1_description">This app needs access to your Do Not Disturb settings so it can toggle DND on and off for you. No other permissions are needed.</string>
+    <string name="grant_permission">Grant DND Access</string>
+    <string name="permission_granted">Permission granted</string>
+
+    <string name="step2_title">Step 2: Add the Tile</string>
+    <string name="step2_description">Swipe down from the top of your screen to open Quick Settings, tap the edit (pencil) icon, then drag the \"Do Not Disturb\" tile into your panel.</string>
+    <string name="add_tile">Add Tile to Quick Settings</string>
+
+    <string name="done_title">You\'re all set!</string>
+    <string name="done_description">You can now toggle Do Not Disturb with a single tap from your Quick Settings. You can safely close this app \u2014 the tile works on its own.</string>
+</resources>
