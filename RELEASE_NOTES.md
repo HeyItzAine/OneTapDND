@@ -1,5 +1,7 @@
 Download **OneTapDND.apk** below and open it on your Android phone to install.
 
+**Upgrading from v1.0:** this release uses a new signing key. Uninstall v1.0 before installing this APK, then grant DND access and add the tile again. The key is retained for future updates.
+
 - The Quick Settings tile uses a saved DND rule and works without opening the app first.
 - Add quiet places by address search, current location, or coordinates, with a radius from 100 to 10,000 meters.
 - Choose DND or total silence on arrival. Total silence also mutes media and alarms.
