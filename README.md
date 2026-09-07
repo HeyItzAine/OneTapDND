@@ -16,7 +16,7 @@ The tile controls this app's rules. DND enabled by another Android mode can rema
 
 ## Quiet places
 
-Choose **Add place**, search an address, use your current location, or enter coordinates copied from a Google Maps pin. Preview the position in your installed map app and set a radius from **100 to 10,000 meters**. Start with 200 meters.
+Choose **Add place**, search an address, read one from a screenshot, use your current location, or enter coordinates copied from a Google Maps pin. The screenshot reader recognizes addresses, place names, plus codes, and common coordinate formats, then fills the form and looks up the pin. Check the extracted text and preview the position before saving. Set a radius from **100 to 10,000 meters**; 200 meters is a practical starting point.
 
 Choose DND for priority interruptions, or enable **Total silence** to also mute media and alarms. In-call audio is unaffected. Leaving the area ends that place's mode. Other active places and manually enabled modes remain in effect. Turning the tile off pauses places you are currently inside until you leave and return.
 
@@ -31,7 +31,7 @@ Places can be edited, disabled, or deleted. The app shows monitoring failures an
 - **Internet:** supports address lookup and the location services dependency.
 - **Boot completed:** restores place monitoring after restarting the phone.
 
-Place names, coordinates, radii, and mode state are stored in private app storage, with backup disabled. There are no ads or analytics. Address searches use the device's geocoder provider, which can send the search to its service. Google Play services handles geofencing. Map previews send the selected coordinates to the map app or browser you open.
+The system photo picker grants access only to the screenshot you select. Text recognition runs on the phone, and One Tap DND does not keep a copy of the image. Place names, coordinates, radii, and mode state are stored in private app storage, with backup disabled. There are no ads or analytics. Address searches, including text extracted from screenshots, use the device's geocoder provider, which can send the search to its service. Google Play services handles geofencing. Map previews send the selected coordinates to the map app or browser you open.
 
 ## Build and release
 

@@ -228,9 +228,13 @@ fun SetupScreen(
                     SegmentedButton(
                         selected = selectedIcon == style,
                         onClick = { onIconStyleSelected(style) },
-                        shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size)
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                        icon = {}
                     ) {
-                        Text(labels[index])
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Text(labels[index], modifier = Modifier.weight(1f))
+                            SegmentedButtonDefaults.Icon(active = selectedIcon == style)
+                        }
                     }
                 }
             }

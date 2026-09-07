@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -30,11 +31,16 @@ import com.google.android.gms.location.CurrentLocationRequest
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
+import com.google.android.gms.tasks.Tasks
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 
 @Composable
@@ -157,7 +163,7 @@ fun QuietPlaces() {
     }
 }
 
-private data class SearchPlace(val label: String, val latitude: Double, val longitude: Double)
+private data class SearchPlace(val label: String, val latitude: Double, val longitude: Double, val name: String?)
 
 @SuppressLint("MissingPermission")
 @Composable
@@ -172,14 +178,66 @@ private fun PlaceEditor(existing: PlaceRule?, preciseLocation: Boolean, onDismis
     var silence by rememberSaveable { mutableStateOf(existing?.totalSilence ?: false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var notice by remember { mutableStateOf<String?>(null) }
     var results by remember { mutableStateOf(emptyList<SearchPlace>()) }
     val candidate = PlaceRule("candidate", name.trim(), latitude.toDoubleOrNull() ?: Double.NaN,
         longitude.toDoubleOrNull() ?: Double.NaN, radius.toFloatOrNull() ?: Float.NaN,
         silence, existing?.enabled ?: true)
-    fun select(place: SearchPlace) {
+    fun select(place: SearchPlace, suggestedName: String? = null) {
         latitude = place.latitude.toString(); longitude = place.longitude.toString()
-        if (name.isBlank()) name = place.label
+        if (name.isBlank()) name = suggestedName ?: place.name ?: place.label
         results = emptyList()
+    }
+    fun searchAddress(searchText: String) {
+        if (searchText.isBlank() || busy) return
+        busy = true; error = null; notice = null
+        scope.launch {
+            try {
+                val found = geocode(context, searchText)
+                results = found
+                if (found.isEmpty()) error = "No places found. Try a fuller address or enter coordinates."
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Exception) { error = "Address search failed. Check your connection or enter coordinates." }
+            finally { busy = false }
+        }
+    }
+    val screenshotPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) {
+            busy = true; error = null; notice = null; results = emptyList()
+            scope.launch {
+                try {
+                    val guess = AddressOcrParser.parse(recognizeScreenshot(context, uri))
+                    if (name.isBlank() && !guess.placeName.isNullOrBlank()) name = guess.placeName
+                    if (!guess.address.isNullOrBlank()) query = guess.address
+                    if (guess.latitude != null && guess.longitude != null) {
+                        latitude = guess.latitude.toString()
+                        longitude = guess.longitude.toString()
+                        if (query.isBlank()) query = "${guess.latitude}, ${guess.longitude}"
+                        notice = "Coordinates read from screenshot. Preview the pin before saving."
+                    } else if (!guess.address.isNullOrBlank()) {
+                        try {
+                            val found = geocode(context, guess.address)
+                            results = found
+                            if (found.isNotEmpty()) {
+                                select(found.first(), guess.placeName)
+                                results = found
+                                notice = "Address read from screenshot. Check the pin or choose another match."
+                            } else {
+                                error = "The address was read, but no map match was found. Edit the address and search again."
+                            }
+                        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            error = "The address was read, but its pin could not be looked up. Check your connection or enter coordinates."
+                        }
+                    } else {
+                        error = "No address or coordinates were found. Crop the screenshot around the address and try again."
+                    }
+                } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                catch (_: Exception) { error = "The screenshot could not be read. Try a clearer or more tightly cropped image." }
+                finally { busy = false }
+            }
+        }
     }
     AlertDialog(onDismissRequest = onDismiss,
         title = { Text(if (existing == null) "Add quiet place" else "Edit quiet place") },
@@ -188,26 +246,14 @@ private fun PlaceEditor(existing: PlaceRule?, preciseLocation: Boolean, onDismis
                 OutlinedTextField(name, { name = it }, label = { Text("Place name") }, singleLine = true)
                 OutlinedTextField(query, { query = it }, label = { Text("Search address or place") }, singleLine = true)
                 Button(enabled = query.isNotBlank() && !busy, onClick = {
-                    busy = true; error = null
-                    scope.launch {
-                        try {
-                            if (!Geocoder.isPresent()) error = "Address search unavailable. Use coordinates or your current location."
-                            else {
-                                val found = withContext(Dispatchers.IO) {
-                                    @Suppress("DEPRECATION")
-                                    Geocoder(context).getFromLocationName(query, 5).orEmpty().map {
-                                        SearchPlace(it.getAddressLine(0) ?: it.featureName ?: query, it.latitude, it.longitude)
-                                    }
-                                }
-                                results = found
-                                if (found.isEmpty()) error = "No places found. Try a fuller address or enter coordinates."
-                            }
-                        } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-                        catch (_: Exception) { error = "Address search failed. Check your connection or enter coordinates." }
-                        finally { busy = false }
-                    }
+                    searchAddress(query)
                 }) { Text("Search") }
                 results.forEach { place -> TextButton(onClick = { select(place) }) { Text(place.label) } }
+                OutlinedButton(enabled = !busy, onClick = {
+                    screenshotPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }) { Text("Read address from screenshot") }
+                Text("Select a screenshot from Maps or another app. Text recognition runs on this device, and the image is not saved by One Tap DND.",
+                    style = MaterialTheme.typography.bodySmall)
                 TextButton(enabled = preciseLocation && !busy, onClick = {
                     busy = true; error = null
                     scope.launch {
@@ -224,13 +270,14 @@ private fun PlaceEditor(existing: PlaceRule?, preciseLocation: Boolean, onDismis
                                     .addOnFailureListener { if (continuation.isActive) continuation.resume(null) }
                             }
                             if (location == null) error = "No location fix. Turn on Location and try again outdoors."
-                            else select(SearchPlace("Current location", location.latitude, location.longitude))
+                            else select(SearchPlace("Current location", location.latitude, location.longitude, "Current location"))
                         } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
                         catch (_: Exception) { error = "Could not read your location. Check precise location access." }
                         finally { busy = false }
                     }
                 }) { Text("Use current location") }
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                notice?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 Text("You can also copy coordinates from a dropped pin in Google Maps.", style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(latitude, { latitude = it }, label = { Text("Latitude (−90 to 90)") }, singleLine = true,
@@ -259,6 +306,31 @@ private fun PlaceEditor(existing: PlaceRule?, preciseLocation: Boolean, onDismis
             onSave(candidate.copy(id = UUID.randomUUID().toString()))
         }) { Text("Save place") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+}
+
+private suspend fun geocode(context: android.content.Context, searchText: String): List<SearchPlace> {
+    if (!Geocoder.isPresent()) throw IllegalStateException("Geocoder unavailable")
+    return withContext(Dispatchers.IO) {
+        @Suppress("DEPRECATION")
+        Geocoder(context).getFromLocationName(searchText, 5).orEmpty().map {
+            SearchPlace(
+                label = it.getAddressLine(0) ?: it.featureName ?: searchText,
+                latitude = it.latitude,
+                longitude = it.longitude,
+                name = it.featureName?.takeUnless { feature -> feature == it.getAddressLine(0) }
+            )
+        }
+    }
+}
+
+private suspend fun recognizeScreenshot(context: android.content.Context, uri: Uri): String = withContext(Dispatchers.IO) {
+    val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    try {
+        val image = InputImage.fromFilePath(context, uri)
+        Tasks.await(recognizer.process(image), 30, TimeUnit.SECONDS).text
+    } finally {
+        recognizer.close()
+    }
 }
 
 private fun openMap(context: android.content.Context, latitude: Double, longitude: Double, name: String) {

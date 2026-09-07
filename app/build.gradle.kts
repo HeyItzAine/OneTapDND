@@ -15,8 +15,8 @@ android {
         applicationId = "com.example.onetapdnd"
         minSdk = 24
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.1.1"
+        versionCode = 4
+        versionName = "1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -58,6 +58,7 @@ android {
 dependencies {
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("androidx.work:work-runtime-ktx:2.10.1")
+    implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
