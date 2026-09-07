@@ -1,4 +1,15 @@
 # Add project specific ProGuard rules here.
+# Room creates generated database implementations through reflection at startup.
+# Keep the no-argument constructor explicitly for R8 full mode.
+-keep class * extends androidx.room.RoomDatabase {
+    public <init>();
+}
+
+# WorkManager creates this worker by its persisted class name and constructor.
+-keep,allowoptimization class com.example.onetapdnd.PlaceRegistrationWorker {
+    public <init>(android.content.Context, androidx.work.WorkerParameters);
+}
+
 # You can control the set of applied configuration files using the
 # proguardFiles setting in build.gradle.
 #

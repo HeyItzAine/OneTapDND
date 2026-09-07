@@ -49,7 +49,9 @@ For a signed release, set `ONETAP_KEYSTORE`, `ONETAP_STORE_PASSWORD`, `ONETAP_KE
 
 The signed APK is `app/build/outputs/apk/release/app-release.apk`. Without signing variables, release builds are unsigned and cannot be installed directly. Keep the existing release key to support updates over earlier versions. Never commit signing keys or passwords.
 
-The GitHub release workflow runs for version tags, or manually for an existing tag. Configure repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`. The workflow checks the APK signature and version, then attaches a single **OneTapDND.apk** to the release. Release notes come from `RELEASE_NOTES.md`.
+The GitHub release workflow runs for version tags, or manually for an existing tag. Configure repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`. The workflow checks the APK signature, version, and constructors needed by WorkManager, then attaches a single **OneTapDND.apk** to the release. Release notes come from `RELEASE_NOTES.md`.
+
+For local release checks, run `python scripts/check_release_apk.py <apk> --dexdump <sdk>/build-tools/36.1.0/dexdump` (use `dexdump.exe` on Windows). This inspects the optimized APK to detect missing database or worker constructors before installation.
 
 Instrumentation tests change DND rules and should run on a dedicated test device. Run `./gradlew connectedDebugAndroidTest` with that device connected. Real arrival latency and manufacturer battery restrictions still need testing on a phone.
 

@@ -1,7 +1,11 @@
 Download **OneTapDND.apk** below and open it on your Android phone to install.
 
-**Upgrading from v1.0:** this release uses a new signing key. Uninstall v1.0 before installing this APK, then grant DND access and add the tile again. The key is retained for future updates.
+**Upgrading from v1.1:** install this APK over the existing app. It uses the same signing key and keeps your settings.
 
+**Upgrading from v1.0:** uninstall v1.0 first because its signing key differs, then grant DND access and add the tile again.
+
+- Fixes the startup crash caused by release optimization removing WorkManager's database constructor.
+- Preserves the background place worker's constructor in optimized releases.
 - The Quick Settings tile uses a saved DND rule and works without opening the app first.
 - Add quiet places by address search, current location, or coordinates, with a radius from 100 to 10,000 meters.
 - Choose DND or total silence on arrival. Total silence also mutes media and alarms.

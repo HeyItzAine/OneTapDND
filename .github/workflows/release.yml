@@ -51,6 +51,7 @@ jobs:
         run: bash ./gradlew testDebugUnitTest lintRelease assembleRelease
       - name: Verify APK and version
         run: |
+          python3 scripts/check_release_apk.py app/build/outputs/apk/release/app-release.apk --dexdump "$ANDROID_HOME/build-tools/36.1.0/dexdump"
           "$ANDROID_HOME/build-tools/36.1.0/apksigner" verify app/build/outputs/apk/release/app-release.apk
           APK_VERSION=$("$ANDROID_HOME/build-tools/36.1.0/aapt" dump badging app/build/outputs/apk/release/app-release.apk | sed -n "s/.*versionName='\([^']*\)'.*/\1/p" | head -1)
           test "$RELEASE_TAG" = "v$APK_VERSION" || { echo 'Tag does not match APK version.'; exit 1; }
