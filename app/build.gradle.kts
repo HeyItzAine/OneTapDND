@@ -15,14 +15,29 @@ android {
         applicationId = "com.example.onetapdnd"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            val keyPath = System.getenv("ONETAP_KEYSTORE")
+            if (!keyPath.isNullOrBlank()) {
+                storeFile = file(keyPath)
+                storePassword = System.getenv("ONETAP_STORE_PASSWORD")
+                keyAlias = System.getenv("ONETAP_KEY_ALIAS")
+                keyPassword = System.getenv("ONETAP_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (!System.getenv("ONETAP_KEYSTORE").isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -41,6 +56,8 @@ android {
 }
 
 dependencies {
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+    implementation("androidx.work:work-runtime-ktx:2.10.1")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

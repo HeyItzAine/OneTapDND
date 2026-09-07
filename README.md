@@ -1,54 +1,58 @@
 # One Tap DND
 
-Google removed the one-tap Do Not Disturb toggle from Quick Settings in Android 15, replacing it with a "Modes" panel that takes two taps. This brings it back.
-
-## How it works
-
-The app adds a custom Quick Settings DND tile. Tap to toggle DND.
+A Quick Settings tile for Do Not Disturb, with optional quiet places that activate DND when you arrive.
 
 ![screenshot](assets/Screenshot.png)
 
-## Setup
-
-1. Install the app
-2. Open it and tap **Grant DND Access** (this takes you to the system settings page where you toggle permission for the app)
-3. Add the tile to your Quick Settings panel (on Android 13+, the app can do this for you with a button, but on older versions, swipe down then tap the pencil/edit icon, and drag the DND tile in)
-
-
-## Permissions & Privacy
-
-This app requires exactly **one** permission:
-
-- **Do Not Disturb access** (`ACCESS_NOTIFICATION_POLICY`): needed to read and toggle your DND state
-
-The app doesn't require internet access, doesn't collect data, stores nothing, and contains no ads/tracking.
-
-[VirusTotal scan](https://www.virustotal.com/gui/file/56b6c197c37a3d95ffb5ef6b8bc6c96091fe7d2ecdc717a8399261e419e65e56)
-SHA-256 `56b6c197c37a3d95ffb5ef6b8bc6c96091fe7d2ecdc717a8399261e419e65e56`
-
-
 ## Install
 
-### From GitHub Releases
+Download **OneTapDND.apk** from [GitHub Releases](../../releases/latest) and open it on your Android phone. Allow installation from your browser or file manager if Android asks. Releases provide one universal APK; no bundle installer is needed.
 
-Download the latest APK from the [Releases](../../releases) page and sideload it onto your device.
+1. Open the app and grant DND access.
+2. Add **Do Not Disturb** to Quick Settings. Android 13+ offers an Add Tile button; on older versions, edit Quick Settings and drag the tile into the panel.
+3. Tap the tile to toggle this app's DND mode. You can close the app afterward.
 
-### Build from source
+The tile controls this app's rules. DND enabled by another Android mode can remain active; the tile then shows **Other mode active**. A locked phone must be unlocked before changing the tile.
 
+## Quiet places
+
+Choose **Add place**, search an address, use your current location, or enter coordinates copied from a Google Maps pin. Preview the position in your installed map app and set a radius from **100 to 10,000 meters**. Start with 200 meters.
+
+Choose DND for priority interruptions, or enable **Total silence** to also mute media and alarms. In-call audio is unaffected. Leaving the area ends that place's mode. Other active places and manually enabled modes remain in effect. Turning the tile off pauses places you are currently inside until you leave and return.
+
+Grant precise location first, then choose **Allow all the time** in the app's location permission settings. Keep device Location and Google Location Accuracy on. Google Play services is required for place monitoring. Saved places are registered again after reboot, an app update, or reopening the app. Android can take a few minutes to report arrivals and departures. Force-stopping the app stops monitoring until you open it again.
+
+Places can be edited, disabled, or deleted. The app shows monitoring failures and provides a Retry button. Disabling or deleting a place ends its active mode.
+
+## Permissions and data
+
+- **DND access:** controls the app's DND rules. The tile works without location permission.
+- **Precise and background location:** detect arrivals and departures for quiet places, including when the app is closed.
+- **Internet:** supports address lookup and the location services dependency.
+- **Boot completed:** restores place monitoring after restarting the phone.
+
+Place names, coordinates, radii, and mode state are stored in private app storage, with backup disabled. There are no ads or analytics. Address searches use the device's geocoder provider, which can send the search to its service. Google Play services handles geofencing. Map previews send the selected coordinates to the map app or browser you open.
+
+## Build and release
+
+Requires JDK 21 and Android SDK 36.1. Android 7.0 (API 24) is the minimum; the target is Android 16 (API 36).
+
+```sh
+./gradlew testDebugUnitTest lintDebug assembleDebug
 ```
-git clone https://github.com/YOUR_USERNAME/OneTapDND.git
-cd OneTapDND
-./gradlew assembleRelease
+
+For a signed release, set `ONETAP_KEYSTORE`, `ONETAP_STORE_PASSWORD`, `ONETAP_KEY_ALIAS`, and `ONETAP_KEY_PASSWORD` in your local environment, then run:
+
+```sh
+./gradlew testDebugUnitTest lintRelease assembleRelease
 ```
 
-The APK will be at `app/build/outputs/apk/release/`.
+The signed APK is `app/build/outputs/apk/release/app-release.apk`. Without signing variables, release builds are unsigned and cannot be installed directly. Keep the existing release key to support updates over earlier versions. Never commit signing keys or passwords.
 
-## Compatibility
+The GitHub release workflow runs for version tags, or manually for an existing tag. Configure repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`. The workflow checks the APK signature and version, then attaches a single **OneTapDND.apk** to the release. Release notes come from `RELEASE_NOTES.md`.
 
-- **Minimum:** Android 7.0 (API 24)
-- **Target:** Android 15 (API 36)
-
+Instrumentation tests change DND rules and should run on a dedicated test device. Run `./gradlew connectedDebugAndroidTest` with that device connected. Real arrival latency and manufacturer battery restrictions still need testing on a phone.
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0. See the [LICENSE](LICENSE) file for details.
+GNU General Public License v3.0. See [LICENSE](LICENSE).

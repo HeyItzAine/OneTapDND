@@ -9,7 +9,7 @@
     <string name="setup_description">Bring back the one-tap Do Not Disturb toggle in your Quick Settings panel.</string>
 
     <string name="step1_title">Step 1: Grant Permission</string>
-    <string name="step1_description">This app needs access to your Do Not Disturb settings so it can toggle DND on and off for you. No other permissions are needed.</string>
+    <string name="step1_description">Allow this app to control its Do Not Disturb modes. Optional quiet places also need location access.</string>
     <string name="grant_permission">Grant DND Access</string>
     <string name="permission_granted">Permission granted</string>
 
@@ -18,7 +18,7 @@
     <string name="add_tile">Add Tile to Quick Settings</string>
 
     <string name="done_title">You\'re all set!</string>
-    <string name="done_description">You can now toggle Do Not Disturb with a single tap from your Quick Settings. You can safely close this app \u2014 the tile works on its own.</string>
+    <string name="done_description">The tile works with the app closed. It controls this app\'s modes; other Android modes can keep DND on. Turning the tile off pauses active quiet places until you leave.</string>
 
     <string name="icon_style_title">App Icon Style</string>
     <string name="icon_style_description">Choose the icon that looks best on your home screen.</string>

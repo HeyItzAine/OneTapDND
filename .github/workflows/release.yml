@@ -1,0 +1,69 @@
+name: Android release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to release
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-36.1' 'build-tools;36.1.0'
+      - name: Prepare signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ONETAP_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ONETAP_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ONETAP_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_BASE64" && test -n "$ONETAP_STORE_PASSWORD" && test -n "$ONETAP_KEY_ALIAS" && test -n "$ONETAP_KEY_PASSWORD" || { echo 'Configure all four Android signing secrets before releasing.'; exit 1; }
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+      - name: Test and build signed APK
+        env:
+          ONETAP_KEYSTORE: ${{ runner.temp }}/release.jks
+          ONETAP_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ONETAP_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ONETAP_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: bash ./gradlew testDebugUnitTest lintRelease assembleRelease
+      - name: Verify APK and version
+        run: |
+          "$ANDROID_HOME/build-tools/36.1.0/apksigner" verify app/build/outputs/apk/release/app-release.apk
+          APK_VERSION=$("$ANDROID_HOME/build-tools/36.1.0/aapt" dump badging app/build/outputs/apk/release/app-release.apk | sed -n "s/.*versionName='\([^']*\)'.*/\1/p" | head -1)
+          test "$RELEASE_TAG" = "v$APK_VERSION" || { echo 'Tag does not match APK version.'; exit 1; }
+          cp app/build/outputs/apk/release/app-release.apk OneTapDND.apk
+      - name: Publish one installable APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" OneTapDND.apk --clobber
+          else
+            gh release create "$RELEASE_TAG" OneTapDND.apk --verify-tag --title "One Tap DND $RELEASE_TAG" --notes-file RELEASE_NOTES.md
+          fi
+      - name: Remove temporary key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"

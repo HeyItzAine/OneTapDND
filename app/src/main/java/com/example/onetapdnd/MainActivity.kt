@@ -67,6 +67,7 @@ class MainActivity : ComponentActivity() {
                             selectedIcon = style
                             applyIconStyle(style)
                         },
+                        placesContent = { QuietPlaces() },
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
@@ -99,15 +100,15 @@ class MainActivity : ComponentActivity() {
     private fun currentIconStyle(): IconStyle {
         val pm = packageManager
         val whiteEnabled = pm.getComponentEnabledSetting(
-            ComponentName(this, ".MainActivityWhiteIcon")
+            ComponentName(this, "$packageName.MainActivityWhiteIcon")
         ) == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
         return if (whiteEnabled) IconStyle.WHITE else IconStyle.BLACK
     }
 
     private fun applyIconStyle(style: IconStyle) {
         val pm = packageManager
-        val blackAlias = ComponentName(this, ".MainActivityBlackIcon")
-        val whiteAlias = ComponentName(this, ".MainActivityWhiteIcon")
+        val blackAlias = ComponentName(this, "$packageName.MainActivityBlackIcon")
+        val whiteAlias = ComponentName(this, "$packageName.MainActivityWhiteIcon")
         val (enableAlias, disableAlias) = when (style) {
             IconStyle.BLACK -> blackAlias to whiteAlias
             IconStyle.WHITE -> whiteAlias to blackAlias
@@ -132,7 +133,8 @@ fun SetupScreen(
     onGrantPermission: () -> Unit,
     onAddTile: () -> Unit,
     onIconStyleSelected: (IconStyle) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    placesContent: @Composable () -> Unit = {}
 ) {
     Column(
         modifier = modifier
@@ -204,6 +206,10 @@ fun SetupScreen(
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        placesContent()
 
         Spacer(modifier = Modifier.height(16.dp))
 

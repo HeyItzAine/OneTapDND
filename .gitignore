@@ -1,5 +1,6 @@
 *.iml
 .gradle/
+.kotlin/
 .idea/
 local.properties
 /build
@@ -15,6 +16,15 @@ local.properties
 
 # Environment
 .env
+.env.*
+!.env.example
+*.log
+*.p12
+*.pem
+signing.properties
+.local/
+Thumbs.db
+desktop.ini
 
 # Claude
 .claude/
