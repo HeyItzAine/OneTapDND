@@ -23,5 +23,5 @@
     <string name="icon_style_title">App Icon Style</string>
     <string name="icon_style_description">Choose the icon that looks best on your home screen.</string>
     <string name="icon_black">Black (light backgrounds)</string>
-    <string name="icon_white">White (dark backgrounds)</string>
+    <string name="icon_white">White on black</string>
 </resources>

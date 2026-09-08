@@ -22,7 +22,7 @@ Choose DND for priority interruptions, or enable **Total silence** to also mute 
 
 Grant precise location first, then choose **Allow all the time** in the app's location permission settings. Keep device Location and Google Location Accuracy on. Google Play services is required for place monitoring. Saved places are registered again after reboot, an app update, or reopening the app. Android can take a few minutes to report arrivals and departures. Force-stopping the app stops monitoring until you open it again.
 
-Places can be edited, disabled, or deleted. The app shows monitoring failures and provides a Retry button. Disabling or deleting a place ends its active mode.
+Places can be edited, disabled, or deleted. While the app is open, each saved place shows its radius and the phone's current distance from its pin. The app shows monitoring failures and provides a Retry button. Disabling or deleting a place ends its active mode.
 
 ## Permissions and data
 
@@ -31,7 +31,7 @@ Places can be edited, disabled, or deleted. The app shows monitoring failures an
 - **Internet:** supports address lookup and the location services dependency.
 - **Boot completed:** restores place monitoring after restarting the phone.
 
-The system photo picker grants access only to the screenshot you select. Text recognition runs on the phone, and One Tap DND does not keep a copy of the image. Place names, coordinates, radii, and mode state are stored in private app storage, with backup disabled. There are no ads or analytics. Address searches, including text extracted from screenshots, use the device's geocoder provider, which can send the search to its service. Google Play services handles geofencing. Map previews send the selected coordinates to the map app or browser you open.
+The system photo picker grants access only to the screenshot you select. Text recognition runs on the phone, and One Tap DND does not keep a copy of the image. Place names, coordinates, radii, and mode state are stored in private app storage, with backup disabled. There are no ads or analytics. Address searches, including text extracted from screenshots, use the device's geocoder provider, which can send the search to its service. Google Play services handles geofencing. The in-app pin picker loads its map style and visible map tiles from OpenFreeMap. Map previews send the selected coordinates to the map app or browser you open.
 
 ## Build and release
 
@@ -40,6 +40,8 @@ Requires JDK 21 and Android SDK 36.1. Android 7.0 (API 24) is the minimum; the t
 ```sh
 ./gradlew testDebugUnitTest lintDebug assembleDebug
 ```
+
+The debug build uses the separate package `com.example.onetapdnd.debug`, so it can be installed beside a signed release without replacing it.
 
 For a signed release, set `ONETAP_KEYSTORE`, `ONETAP_STORE_PASSWORD`, `ONETAP_KEY_ALIAS`, and `ONETAP_KEY_PASSWORD` in your local environment, then run:
 

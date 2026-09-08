@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -64,8 +65,7 @@ class MainActivity : ComponentActivity() {
                         onGrantPermission = { openDndPermissionSettings() },
                         onAddTile = { requestTileAddition() },
                         onIconStyleSelected = { style ->
-                            selectedIcon = style
-                            applyIconStyle(style)
+                            if (applyIconStyle(style)) selectedIcon = style
                         },
                         placesContent = { QuietPlaces() },
                         modifier = Modifier.padding(innerPadding)
@@ -100,28 +100,61 @@ class MainActivity : ComponentActivity() {
     private fun currentIconStyle(): IconStyle {
         val pm = packageManager
         val whiteEnabled = pm.getComponentEnabledSetting(
-            ComponentName(this, "$packageName.MainActivityWhiteIcon")
+            launcherAlias("MainActivityWhiteIcon")
         ) == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
         return if (whiteEnabled) IconStyle.WHITE else IconStyle.BLACK
     }
 
-    private fun applyIconStyle(style: IconStyle) {
+    private fun launcherAlias(simpleName: String): ComponentName {
+        val basePackage = MainActivity::class.java.name.substringBeforeLast('.')
+        return ComponentName(this, "$basePackage.$simpleName")
+    }
+
+    private fun applyIconStyle(style: IconStyle): Boolean {
         val pm = packageManager
-        val blackAlias = ComponentName(this, "$packageName.MainActivityBlackIcon")
-        val whiteAlias = ComponentName(this, "$packageName.MainActivityWhiteIcon")
+        val blackAlias = launcherAlias("MainActivityBlackIcon")
+        val whiteAlias = launcherAlias("MainActivityWhiteIcon")
         val (enableAlias, disableAlias) = when (style) {
             IconStyle.BLACK -> blackAlias to whiteAlias
             IconStyle.WHITE -> whiteAlias to blackAlias
         }
-        pm.setComponentEnabledSetting(
-            enableAlias,
-            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-            PackageManager.DONT_KILL_APP
-        )
-        pm.setComponentEnabledSetting(
-            disableAlias,
-            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-            PackageManager.DONT_KILL_APP
+        return runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                pm.setComponentEnabledSettings(
+                    listOf(
+                        PackageManager.ComponentEnabledSetting(
+                            enableAlias,
+                            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                            PackageManager.DONT_KILL_APP
+                        ),
+                        PackageManager.ComponentEnabledSetting(
+                            disableAlias,
+                            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                            PackageManager.DONT_KILL_APP
+                        )
+                    )
+                )
+            } else {
+                pm.setComponentEnabledSetting(
+                    enableAlias,
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+                pm.setComponentEnabledSetting(
+                    disableAlias,
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+            }
+        }.fold(
+            onSuccess = {
+                Toast.makeText(this, "Icon changed. Your launcher may take a few seconds to refresh.", Toast.LENGTH_SHORT).show()
+                true
+            },
+            onFailure = {
+                Toast.makeText(this, "Could not change the app icon.", Toast.LENGTH_LONG).show()
+                false
+            }
         )
     }
 }

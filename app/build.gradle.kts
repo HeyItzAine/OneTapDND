@@ -15,8 +15,8 @@ android {
         applicationId = "com.example.onetapdnd"
         minSdk = 24
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.2"
+        versionCode = 5
+        versionName = "1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -34,6 +34,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             if (!System.getenv("ONETAP_KEYSTORE").isNullOrBlank()) {
                 signingConfig = signingConfigs.getByName("release")
@@ -59,6 +63,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("androidx.work:work-runtime-ktx:2.10.1")
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    implementation("org.maplibre.compose:maplibre-compose:0.13.1")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

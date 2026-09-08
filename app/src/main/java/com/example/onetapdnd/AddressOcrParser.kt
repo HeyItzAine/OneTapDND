@@ -38,6 +38,9 @@ object AddressOcrParser {
     private val plusCode = Regex(
         """(?i)(?<![A-Z0-9])[23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,3}(?![A-Z0-9])"""
     )
+    private val loosePlusCode = Regex(
+        """(?i)(?<![A-Z0-9])[23456789CFGHJMPQRVWX0O]{4,8}\s*\+\s*[23456789CFGHJMPQRVWX0O]{2,3}(?![A-Z0-9])"""
+    )
     private val country = Regex(
         """(?i)\b(?:united states|usa|united kingdom|uk|canada|australia|new zealand|indonesia|india|japan|china|singapore|malaysia|thailand|philippines|vietnam|germany|france|spain|italy|brazil|mexico|netherlands|belgium|switzerland|austria|ireland|south africa|west java|east java|central java)\b"""
     )
@@ -62,7 +65,7 @@ object AddressOcrParser {
     private val rating = Regex("""^\d(?:[.,]\d)?\s*(?:\(.*\)|stars?)?$""", RegexOption.IGNORE_CASE)
 
     fun parse(rawText: String): OcrLocationGuess {
-        val bounded = rawText.take(MAX_TEXT_LENGTH)
+        val bounded = repairPlusCodes(rawText.take(MAX_TEXT_LENGTH))
         val lines = bounded.lineSequence().take(MAX_LINES).map(::cleanLine)
             .filter { it.isNotBlank() }.toList()
         val coordinates = findCoordinates(lines)
@@ -76,8 +79,28 @@ object AddressOcrParser {
         )
     }
 
+    /** Converts pasted or OCR line breaks into a stable Android Geocoder query. */
+    fun normalizeSearchText(value: String): String = repairPlusCodes(
+        value.take(MAX_TEXT_LENGTH)
+            .replace("\r\n", "\n")
+            .replace('\r', '\n')
+            .lineSequence()
+            .take(MAX_LINES)
+            .map(::cleanLine)
+            .filter { it.isNotBlank() }
+            .joinToString(", ")
+    ).replace(Regex("""\s*,\s*"""), ", ")
+        .replace(Regex("""(?:,\s*){2,}"""), ", ")
+        .trim(' ', ',')
+
+    private fun repairPlusCodes(value: String): String = value.replace(loosePlusCode) { match ->
+        match.value.replace(Regex("""\s+"""), "")
+            .replace('0', 'Q').replace('O', 'Q').replace('o', 'Q')
+    }
+
     private fun cleanLine(value: String): String = value.take(MAX_LINE_LENGTH)
         .replace('\u00A0', ' ')
+        .replace(Regex("""(?i)\b(jl|kec|kab)\s+\."""), "$1.")
         .replace(Regex("""^[•●▪◦·|>]+\s*"""), "")
         .replace(Regex("""\s+"""), " ")
         .trim()
@@ -124,7 +147,9 @@ object AddressOcrParser {
             while (start > 0 && anchor - start < 2 && scores[start - 1] >= 3 && !isJunk(lines[start - 1])) start--
             var end = anchor
             val anchorHasStreet = street.containsMatchIn(lines[anchor])
-            while (end + 1 < lines.size && end - start < 4 && scores[end + 1] >= 1 && !isJunk(lines[end + 1])) {
+            while (end + 1 < lines.size && end - start < 4 &&
+                (scores[end + 1] >= 1 || looksLikeAddressContinuation(lines[end + 1])) &&
+                !isJunk(lines[end + 1])) {
                 if (anchorHasStreet && plusCode.containsMatchIn(lines[end + 1])) break
                 end++
             }
@@ -139,6 +164,10 @@ object AddressOcrParser {
         val value = address.takeIf { it.length >= 5 } ?: return null
         return winner.first to value
     }
+
+    private fun looksLikeAddressContinuation(line: String): Boolean =
+        line.length in 2..100 && line.any(Char::isLetter) &&
+            !line.contains(Regex("""[.!?]\s+\p{Lu}"""))
 
     private fun addressScore(line: String): Int {
         if (isJunk(line)) return -100

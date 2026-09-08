@@ -26,9 +26,6 @@ signing.properties
 Thumbs.db
 desktop.ini
 
-# Claude
-.claude/
-
 # Release artifacts (built locally)
 *.apk
 *.aab

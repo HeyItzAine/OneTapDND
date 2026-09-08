@@ -6,6 +6,7 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.SharedPreferences
 import android.location.Geocoder
+import android.location.Location
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -27,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.gms.location.CurrentLocationRequest
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
@@ -36,6 +38,7 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -53,6 +56,7 @@ fun QuietPlaces() {
     var editingId by rememberSaveable { mutableStateOf<String?>(null) }
     var deletingId by remember { mutableStateOf<String?>(null) }
     var feedback by remember { mutableStateOf<String?>(null) }
+    var currentLocation by remember { mutableStateOf<Location?>(null) }
     DisposableEffect(lifecycle) {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> revision++ }
         val observer = LifecycleEventObserver { _, event ->
@@ -73,6 +77,25 @@ fun QuietPlaces() {
     val precise = remember(revision) { PlaceMonitoring.hasPreciseLocation(context) }
     val background = remember(revision) { PlaceMonitoring.hasBackgroundLocation(context) }
     val hasDnd = remember(revision) { DndController(context).hasAccess }
+    LaunchedEffect(precise, lifecycle) {
+        if (!precise) {
+            currentLocation = null
+            return@LaunchedEffect
+        }
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                val latest = try {
+                    currentDeviceLocation(context)
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    null
+                }
+                currentLocation = latest ?: currentLocation
+                delay(30_000)
+            }
+        }
+    }
     val foregroundRequest = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         revision++
         PlaceMonitoring.schedule(context)
@@ -119,7 +142,13 @@ fun QuietPlaces() {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(rule.name, style = MaterialTheme.typography.titleSmall)
-                        Text("${rule.radiusMeters.toInt()} m • ${if (rule.totalSilence) "Total silence" else "DND"}",
+                        val distance = currentLocation?.let { distanceToRule(it, rule) }
+                        val details = buildList {
+                            add("${rule.radiusMeters.toInt()} m radius")
+                            distance?.let { add(formatDistance(it)) }
+                            add(if (rule.totalSilence) "Total silence" else "DND")
+                        }.joinToString(" • ")
+                        Text(details,
                             style = MaterialTheme.typography.bodySmall)
                         Text(when {
                             !rule.enabled -> "Disabled"
@@ -163,7 +192,7 @@ fun QuietPlaces() {
     }
 }
 
-private data class SearchPlace(val label: String, val latitude: Double, val longitude: Double, val name: String?)
+private data class SearchPlace(val label: String, val latitude: Double, val longitude: Double)
 
 @SuppressLint("MissingPermission")
 @Composable
@@ -180,25 +209,58 @@ private fun PlaceEditor(existing: PlaceRule?, preciseLocation: Boolean, onDismis
     var error by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     var results by remember { mutableStateOf(emptyList<SearchPlace>()) }
+    var lastResolvedQuery by rememberSaveable { mutableStateOf("") }
+    var mapPickerCenter by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var mapPickerZoom by remember { mutableDoubleStateOf(18.0) }
     val candidate = PlaceRule("candidate", name.trim(), latitude.toDoubleOrNull() ?: Double.NaN,
         longitude.toDoubleOrNull() ?: Double.NaN, radius.toFloatOrNull() ?: Float.NaN,
         silence, existing?.enabled ?: true)
-    fun select(place: SearchPlace, suggestedName: String? = null) {
+    fun select(place: SearchPlace) {
         latitude = place.latitude.toString(); longitude = place.longitude.toString()
-        if (name.isBlank()) name = suggestedName ?: place.name ?: place.label
+        lastResolvedQuery = AddressOcrParser.normalizeSearchText(query)
         results = emptyList()
     }
     fun searchAddress(searchText: String) {
-        if (searchText.isBlank() || busy) return
+        val normalized = AddressOcrParser.normalizeSearchText(searchText)
+        if (normalized.isBlank() || busy) return
+        query = normalized
         busy = true; error = null; notice = null
         scope.launch {
             try {
-                val found = geocode(context, searchText)
-                results = found
-                if (found.isEmpty()) error = "No places found. Try a fuller address or enter coordinates."
+                val found = geocode(context, normalized)
+                if (found.isEmpty()) {
+                    results = emptyList()
+                    error = "No places found. Check the address or plus code and try again."
+                } else {
+                    select(found.first())
+                    results = found
+                    notice = "Coordinates filled from the first match. Choose another result if needed."
+                }
             } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
             catch (_: Exception) { error = "Address search failed. Check your connection or enter coordinates." }
             finally { busy = false }
+        }
+    }
+    LaunchedEffect(query) {
+        val normalized = AddressOcrParser.normalizeSearchText(query)
+        if (normalized.length < 5 || normalized == lastResolvedQuery) return@LaunchedEffect
+        delay(900)
+        if (busy || normalized != AddressOcrParser.normalizeSearchText(query)) return@LaunchedEffect
+        busy = true
+        error = null
+        try {
+            val found = geocode(context, normalized)
+            if (found.isNotEmpty() && normalized == AddressOcrParser.normalizeSearchText(query)) {
+                select(found.first())
+                results = found
+                notice = "Coordinates filled automatically. Choose another match if the pin is wrong."
+            }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Automatic lookup stays quiet; the Search button provides an explicit retry and error.
+        } finally {
+            busy = false
         }
     }
     val screenshotPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -207,7 +269,6 @@ private fun PlaceEditor(existing: PlaceRule?, preciseLocation: Boolean, onDismis
             scope.launch {
                 try {
                     val guess = AddressOcrParser.parse(recognizeScreenshot(context, uri))
-                    if (name.isBlank() && !guess.placeName.isNullOrBlank()) name = guess.placeName
                     if (!guess.address.isNullOrBlank()) query = guess.address
                     if (guess.latitude != null && guess.longitude != null) {
                         latitude = guess.latitude.toString()
@@ -219,7 +280,7 @@ private fun PlaceEditor(existing: PlaceRule?, preciseLocation: Boolean, onDismis
                             val found = geocode(context, guess.address)
                             results = found
                             if (found.isNotEmpty()) {
-                                select(found.first(), guess.placeName)
+                                select(found.first())
                                 results = found
                                 notice = "Address read from screenshot. Check the pin or choose another match."
                             } else {
@@ -231,10 +292,10 @@ private fun PlaceEditor(existing: PlaceRule?, preciseLocation: Boolean, onDismis
                             error = "The address was read, but its pin could not be looked up. Check your connection or enter coordinates."
                         }
                     } else {
-                        error = "No address or coordinates were found. Crop the screenshot around the address and try again."
+                        error = "No address or coordinates were recognized. Try another screenshot or paste the address below."
                     }
                 } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-                catch (_: Exception) { error = "The screenshot could not be read. Try a clearer or more tightly cropped image." }
+                catch (_: Exception) { error = "The screenshot could not be read. Try another image or paste the address below." }
                 finally { busy = false }
             }
         }
@@ -244,7 +305,14 @@ private fun PlaceEditor(existing: PlaceRule?, preciseLocation: Boolean, onDismis
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(name, { name = it }, label = { Text("Place name") }, singleLine = true)
-                OutlinedTextField(query, { query = it }, label = { Text("Search address or place") }, singleLine = true)
+                OutlinedTextField(query, {
+                    query = AddressOcrParser.normalizeSearchText(it)
+                    if (query != lastResolvedQuery) {
+                        error = null
+                        notice = null
+                    }
+                }, label = { Text("Address, place, or plus code") }, singleLine = true,
+                    supportingText = { Text("Coordinates fill automatically after you paste or type an address.") })
                 Button(enabled = query.isNotBlank() && !busy, onClick = {
                     searchAddress(query)
                 }) { Text("Search") }
@@ -258,24 +326,44 @@ private fun PlaceEditor(existing: PlaceRule?, preciseLocation: Boolean, onDismis
                     busy = true; error = null
                     scope.launch {
                         try {
-                            val location = suspendCancellableCoroutine { continuation ->
-                                val cancellation = CancellationTokenSource()
-                                continuation.invokeOnCancellation { cancellation.cancel() }
-                                val request = CurrentLocationRequest.Builder()
-                                    .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
-                                    .setMaxUpdateAgeMillis(5_000).setDurationMillis(15_000).build()
-                                LocationServices.getFusedLocationProviderClient(context)
-                                    .getCurrentLocation(request, cancellation.token)
-                                    .addOnSuccessListener { if (continuation.isActive) continuation.resume(it) }
-                                    .addOnFailureListener { if (continuation.isActive) continuation.resume(null) }
-                            }
+                            val location = currentDeviceLocation(context)
                             if (location == null) error = "No location fix. Turn on Location and try again outdoors."
-                            else select(SearchPlace("Current location", location.latitude, location.longitude, "Current location"))
+                            else select(SearchPlace("Current location", location.latitude, location.longitude))
                         } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
                         catch (_: Exception) { error = "Could not read your location. Check precise location access." }
                         finally { busy = false }
                     }
                 }) { Text("Use current location") }
+                OutlinedButton(enabled = !busy, onClick = {
+                    val currentLatitude = latitude.toDoubleOrNull()
+                    val currentLongitude = longitude.toDoubleOrNull()
+                    if (currentLatitude != null && currentLatitude in -90.0..90.0 &&
+                        currentLongitude != null && currentLongitude in -180.0..180.0) {
+                        mapPickerCenter = currentLatitude to currentLongitude
+                        mapPickerZoom = 18.0
+                    } else {
+                        busy = true; error = null
+                        scope.launch {
+                            try {
+                                val found = if (query.isNotBlank()) geocode(context, query) else emptyList()
+                                if (found.isNotEmpty()) {
+                                    mapPickerCenter = found.first().latitude to found.first().longitude
+                                    mapPickerZoom = 18.0
+                                } else {
+                                    mapPickerCenter = 0.0 to 0.0
+                                    mapPickerZoom = 2.0
+                                }
+                            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                throw cancelled
+                            } catch (_: Exception) {
+                                mapPickerCenter = 0.0 to 0.0
+                                mapPickerZoom = 2.0
+                            } finally {
+                                busy = false
+                            }
+                        }
+                    }
+                }) { Text("Choose on map") }
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 notice?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -301,23 +389,123 @@ private fun PlaceEditor(existing: PlaceRule?, preciseLocation: Boolean, onDismis
                 Text("On leaving: end this place's mode. Other active places and modes stay in effect.", style = MaterialTheme.typography.bodySmall)
             }
         },
-        confirmButton = { TextButton(enabled = candidate.isValid() && !busy, onClick = {
-            // A new ID prevents delayed transitions for the old coordinates from applying after an edit.
-            onSave(candidate.copy(id = UUID.randomUUID().toString()))
-        }) { Text("Save place") } },
+        confirmButton = {
+            val normalizedQuery = AddressOcrParser.normalizeSearchText(query)
+            val radiusValue = radius.toFloatOrNull()
+            val radiusIsValid = radiusValue != null && radiusValue.isFinite() && radiusValue in 100f..10_000f
+            val coordinatesAreValid = candidate.latitude.isFinite() && candidate.latitude in -90.0..90.0 &&
+                candidate.longitude.isFinite() && candidate.longitude in -180.0..180.0
+            val canResolveAddress = normalizedQuery.length >= 5
+            TextButton(enabled = !busy && name.isNotBlank() && radiusIsValid &&
+                (coordinatesAreValid || canResolveAddress), onClick = {
+                val direct = candidate.copy(name = name.trim())
+                if (direct.isValid()) {
+                    // A new ID prevents delayed transitions for old coordinates from applying after an edit.
+                    onSave(direct.copy(id = UUID.randomUUID().toString()))
+                } else {
+                    busy = true; error = null; notice = null
+                    scope.launch {
+                        try {
+                            val found = geocode(context, normalizedQuery)
+                            if (found.isEmpty()) {
+                                error = "That address could not be located. Check it or choose a search result."
+                            } else {
+                                val place = found.first()
+                                val resolved = PlaceRule(
+                                    id = UUID.randomUUID().toString(),
+                                    name = name.trim(),
+                                    latitude = place.latitude,
+                                    longitude = place.longitude,
+                                    radiusMeters = radiusValue!!,
+                                    totalSilence = silence,
+                                    enabled = existing?.enabled ?: true
+                                )
+                                latitude = place.latitude.toString()
+                                longitude = place.longitude.toString()
+                                results = found
+                                lastResolvedQuery = normalizedQuery
+                                if (resolved.isValid()) onSave(resolved)
+                                else error = "The map result was invalid. Choose another result or enter coordinates."
+                            }
+                        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            error = "Address lookup failed. Check your connection and try Save place again."
+                        } finally {
+                            busy = false
+                        }
+                    }
+                }
+            }) { Text("Save place") }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+
+    mapPickerCenter?.let { center ->
+        LocationMapPicker(
+            initialLatitude = center.first,
+            initialLongitude = center.second,
+            initialZoom = mapPickerZoom,
+            onSearch = { searchText ->
+                geocode(context, searchText).firstOrNull()?.let { it.latitude to it.longitude }
+            },
+            onDismiss = { mapPickerCenter = null },
+            onLocationChosen = { chosenLatitude, chosenLongitude ->
+                latitude = chosenLatitude.toString()
+                longitude = chosenLongitude.toString()
+                lastResolvedQuery = AddressOcrParser.normalizeSearchText(query)
+                notice = "Coordinates set from the map pin."
+                error = null
+                mapPickerCenter = null
+            }
+        )
+    }
+}
+
+@SuppressLint("MissingPermission")
+private suspend fun currentDeviceLocation(context: android.content.Context): Location? =
+    suspendCancellableCoroutine { continuation ->
+        val cancellation = CancellationTokenSource()
+        continuation.invokeOnCancellation { cancellation.cancel() }
+        val request = CurrentLocationRequest.Builder()
+            .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
+            .setMaxUpdateAgeMillis(5_000)
+            .setDurationMillis(15_000)
+            .build()
+        LocationServices.getFusedLocationProviderClient(context)
+            .getCurrentLocation(request, cancellation.token)
+            .addOnSuccessListener { if (continuation.isActive) continuation.resume(it) }
+            .addOnFailureListener { if (continuation.isActive) continuation.resume(null) }
+    }
+
+private fun distanceToRule(location: Location, rule: PlaceRule): Float {
+    val result = FloatArray(1)
+    Location.distanceBetween(
+        location.latitude,
+        location.longitude,
+        rule.latitude,
+        rule.longitude,
+        result
+    )
+    return result[0]
+}
+
+private fun formatDistance(meters: Float): String = when {
+    meters < 1_000f -> "${meters.toInt()} m away"
+    meters < 10_000f -> String.format(java.util.Locale.getDefault(), "%.1f km away", meters / 1_000f)
+    else -> "${(meters / 1_000f).toInt()} km away"
 }
 
 private suspend fun geocode(context: android.content.Context, searchText: String): List<SearchPlace> {
     if (!Geocoder.isPresent()) throw IllegalStateException("Geocoder unavailable")
+    val normalized = AddressOcrParser.normalizeSearchText(searchText)
+    if (normalized.isBlank()) return emptyList()
     return withContext(Dispatchers.IO) {
         @Suppress("DEPRECATION")
-        Geocoder(context).getFromLocationName(searchText, 5).orEmpty().map {
+        Geocoder(context).getFromLocationName(normalized, 5).orEmpty().map {
             SearchPlace(
-                label = it.getAddressLine(0) ?: it.featureName ?: searchText,
+                label = it.getAddressLine(0) ?: it.featureName ?: normalized,
                 latitude = it.latitude,
-                longitude = it.longitude,
-                name = it.featureName?.takeUnless { feature -> feature == it.getAddressLine(0) }
+                longitude = it.longitude
             )
         }
     }

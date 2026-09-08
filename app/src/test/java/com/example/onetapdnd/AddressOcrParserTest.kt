@@ -11,15 +11,15 @@ class AddressOcrParserTest {
     fun extractsAddressAndNameFromNoisyMapsScreenshot() {
         val text = """
             19.17     8.01 KB/s  VoLTE  5G  45
-            WJ's Coffee & Eatery
+            Sample Cafe
             Overview Menu Reviews Photos Updates
             Some say the food preparation process can be slow during busy times
             Order online
             Open · Closes 22.00
-            Jl. Legenda Wisata, Wanaherang,
-            Kec. Gn. Putri, Kabupaten Bogor,
-            Jawa Barat 16967
-            JW2W+6Q Wanaherang, Bogor Regency, West Java
+            Jl. Contoh Raya, Kelurahan Harapan,
+            Kec. Sukamaju, Kota Contoh,
+            Jawa Barat 12345
+            7Q7Q+Q7 Kota Contoh, West Java
             Update location
             Popular times
             Mondays
@@ -30,11 +30,11 @@ class AddressOcrParserTest {
 
         val result = AddressOcrParser.parse(text)
 
-        assertEquals("WJ's Coffee & Eatery", result.placeName)
-        assertTrue(result.address.orEmpty().contains("Jl. Legenda Wisata"))
-        assertTrue(result.address.orEmpty().contains("Jawa Barat 16967"))
+        assertEquals("Sample Cafe", result.placeName)
+        assertTrue(result.address.orEmpty().contains("Jl. Contoh Raya"))
+        assertTrue(result.address.orEmpty().contains("Jawa Barat 12345"))
         assertFalse(result.address.orEmpty().contains("Popular times"))
-        assertFalse(result.address.orEmpty().contains("JW2W+6Q"))
+        assertFalse(result.address.orEmpty().contains("7Q7Q+Q7"))
     }
 
     @Test
@@ -156,9 +156,33 @@ class AddressOcrParserTest {
 
     @Test
     fun acceptsPlusCodeWhenItIsTheOnlyLocation() {
-        val result = AddressOcrParser.parse("JW2W+6Q Wanaherang, Bogor Regency, West Java")
-        assertTrue(result.address.orEmpty().contains("JW2W+6Q"))
-        assertTrue(result.address.orEmpty().contains("Bogor Regency"))
+        val result = AddressOcrParser.parse("7Q7Q+Q7 Kota Contoh, West Java")
+        assertTrue(result.address.orEmpty().contains("7Q7Q+Q7"))
+        assertTrue(result.address.orEmpty().contains("Kota Contoh"))
+    }
+
+    @Test
+    fun repairsCommonPlusCodeOcrAndKeepsMultilineAddressTogether() {
+        val plusCode = AddressOcrParser.parse("7Q7Q + QO Kota Contoh\nWest Java")
+        assertTrue(plusCode.address.orEmpty().contains("7Q7Q+QQ"))
+        assertTrue(plusCode.address.orEmpty().contains("Kota Contoh"))
+
+        val address = AddressOcrParser.parse(
+            "Jl . Contoh Raya\nKelurahan Harapan\nKec . Sukamaju\nKota Contoh\nJawa Barat 12345"
+        ).address.orEmpty()
+        assertTrue(address.contains("Jl. Contoh Raya"))
+        assertTrue(address.contains("Kelurahan Harapan"))
+        assertTrue(address.contains("Jawa Barat 12345"))
+    }
+
+    @Test
+    fun normalizesPastedNewlinesForGeocoding() {
+        assertEquals(
+            "Jl. Contoh Raya, Kelurahan Harapan, Kec. Sukamaju, Kota Contoh, Jawa Barat 12345",
+            AddressOcrParser.normalizeSearchText(
+                "  Jl. Contoh Raya, Kelurahan Harapan,\r\nKec. Sukamaju, Kota Contoh,\nJawa Barat 12345  "
+            )
+        )
     }
 
     @Test
