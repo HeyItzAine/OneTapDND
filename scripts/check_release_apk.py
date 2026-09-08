@@ -14,6 +14,14 @@ REQUIRED = {
         "android.content.Context",
         "androidx.work.WorkerParameters",
     ),
+    "com.example.onetapdnd.PauseResumeWorker": (
+        "android.content.Context",
+        "androidx.work.WorkerParameters",
+    ),
+    "com.example.onetapdnd.AdaptiveLocationWorker": (
+        "android.content.Context",
+        "androidx.work.WorkerParameters",
+    ),
 }
 
 

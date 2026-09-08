@@ -10,6 +10,14 @@
     public <init>(android.content.Context, androidx.work.WorkerParameters);
 }
 
+-keep,allowoptimization class com.example.onetapdnd.PauseResumeWorker {
+    public <init>(android.content.Context, androidx.work.WorkerParameters);
+}
+
+-keep,allowoptimization class com.example.onetapdnd.AdaptiveLocationWorker {
+    public <init>(android.content.Context, androidx.work.WorkerParameters);
+}
+
 # You can control the set of applied configuration files using the
 # proguardFiles setting in build.gradle.
 #

@@ -42,6 +42,7 @@ object PlaceMonitoring {
         // Serialize registration so an older request cannot overwrite a later edit.
         WorkManager.getInstance(context).enqueueUniqueWork("register-places",
             ExistingWorkPolicy.APPEND_OR_REPLACE, OneTimeWorkRequestBuilder<PlaceRegistrationWorker>().build())
+        AdaptiveLocationChecks.ensureScheduled(context)
     }
 
     fun pendingIntent(context: Context): PendingIntent = PendingIntent.getBroadcast(
@@ -67,6 +68,7 @@ class PlaceRegistrationWorker(context: Context, parameters: WorkerParameters) : 
         val client = LocationServices.getGeofencingClient(context)
         val rules = store.rules().filter { it.enabled }
         val problem = when {
+            store.isPaused() -> "Quiet places paused."
             rules.isEmpty() -> "No places enabled."
             !DndController(context).hasAccess -> "Grant DND access to enable quiet places."
             !PlaceMonitoring.hasPreciseLocation(context) -> "Allow precise location to enable quiet places."
@@ -79,8 +81,9 @@ class PlaceRegistrationWorker(context: Context, parameters: WorkerParameters) : 
         if (problem != null) {
             runCatching { Tasks.await(client.removeGeofences(PlaceMonitoring.pendingIntent(context)), 20, TimeUnit.SECONDS) }
             store.clearPosition()
-            runCatching { DndController(context).sync() }
+            MonitoringCoordinator(context).reconcile()
             store.status(problem)
+            MonitoringNotification.update(context)
             return Result.success()
         }
         return try {
@@ -96,11 +99,13 @@ class PlaceRegistrationWorker(context: Context, parameters: WorkerParameters) : 
                 }).build()
             Tasks.await(client.addGeofences(request, PlaceMonitoring.pendingIntent(context)), 20, TimeUnit.SECONDS)
             store.status("Monitoring ${rules.size} saved ${if (rules.size == 1) "place" else "places"}.")
+            MonitoringNotification.update(context)
             Result.success()
         } catch (error: Exception) {
             store.clearPosition()
-            runCatching { DndController(context).sync() }
+            MonitoringCoordinator(context).reconcile()
             store.status(PlaceMonitoring.errorMessage(error))
+            MonitoringNotification.update(context)
             if (runAttemptCount < 3) Result.retry() else Result.failure()
         }
     }
@@ -110,10 +115,15 @@ class GeofenceReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val event = GeofencingEvent.fromIntent(intent) ?: return
         val store = PlaceStore(context)
+        if (store.isPaused()) {
+            PlaceMonitoring.schedule(context)
+            return
+        }
         if (event.hasError()) {
             store.clearPosition()
-            runCatching { DndController(context).sync() }
+            MonitoringCoordinator(context).reconcile()
             store.status("Location monitoring interrupted. Open the app to retry.")
+            MonitoringNotification.update(context)
             PlaceMonitoring.schedule(context)
             return
         }
@@ -122,11 +132,20 @@ class GeofenceReceiver : BroadcastReceiver() {
         val enabled = store.rules().filter { it.enabled }.map { it.id }.toSet()
         val ids = event.triggeringGeofences.orEmpty().map { it.requestId }.toSet() intersect enabled
         if (ids.isEmpty()) return
-        if (!PlaceMonitoring.hasPreciseLocation(context) || !PlaceMonitoring.hasBackgroundLocation(context)) return
-        store.saveState(store.state().transition(ids, event.geofenceTransition == Geofence.GEOFENCE_TRANSITION_ENTER))
-        runCatching { DndController(context).sync() }.onFailure {
-            store.status("Could not change DND. Check DND access, then retry.")
+        if (!PlaceMonitoring.hasPreciseLocation(context) || !PlaceMonitoring.hasBackgroundLocation(context)) {
+            store.clearPosition()
+            MonitoringCoordinator(context).reconcile()
+            store.status("Location access changed. Open the app to restore monitoring.")
+            MonitoringNotification.update(context)
+            PlaceMonitoring.schedule(context)
+            return
         }
+        store.saveState(store.state().transition(ids, event.geofenceTransition == Geofence.GEOFENCE_TRANSITION_ENTER))
+        runCatching { MonitoringCoordinator(context).reconcile() }.onFailure {
+            store.status("Could not change DND. Check DND access, then retry.")
+            MonitoringNotification.update(context)
+        }
+        AdaptiveLocationChecks.reschedule(context, AdaptiveLocationChecks.MIN_DELAY_MS)
     }
 }
 
@@ -136,7 +155,7 @@ class RestoreReceiver : BroadcastReceiver() {
             // Recheck position after a reboot before restoring place-based silence.
             PlaceStore(context).clearPosition()
         }
-        runCatching { DndController(context).sync() }
+        MonitoringCoordinator(context).reconcile()
         PlaceMonitoring.schedule(context)
     }
 }

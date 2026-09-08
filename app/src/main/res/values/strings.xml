@@ -6,22 +6,34 @@
     <string name="tile_tap_to_setup">Tap to set up</string>
 
     <string name="setup_title">One Tap DND</string>
-    <string name="setup_description">Bring back the one-tap Do Not Disturb toggle in your Quick Settings panel.</string>
+    <string name="setup_description">DND controls and quiet places</string>
 
-    <string name="step1_title">Step 1: Grant Permission</string>
-    <string name="step1_description">Allow this app to control its Do Not Disturb modes. Optional quiet places also need location access.</string>
-    <string name="grant_permission">Grant DND Access</string>
+    <string name="step1_title">DND access</string>
+    <string name="step1_description">Android requires this access before One Tap DND can change Do Not Disturb.</string>
+    <string name="grant_permission">Allow DND access</string>
     <string name="permission_granted">Permission granted</string>
 
-    <string name="step2_title">Step 2: Add the Tile</string>
-    <string name="step2_description">Swipe down from the top of your screen to open Quick Settings, tap the edit (pencil) icon, then drag the \"Do Not Disturb\" tile into your panel.</string>
-    <string name="add_tile">Add Tile to Quick Settings</string>
+    <string name="step2_title">Quick Settings tile</string>
+    <string name="step2_description">Add the tile, then tap it to control DND. In a quiet place, tapping the tile pauses place monitoring for one hour.</string>
+    <string name="add_tile">Add tile</string>
 
     <string name="done_title">You\'re all set!</string>
     <string name="done_description">The tile works with the app closed. It controls this app\'s modes; other Android modes can keep DND on. Turning the tile off pauses active quiet places until you leave.</string>
 
-    <string name="icon_style_title">App Icon Style</string>
-    <string name="icon_style_description">Choose the icon that looks best on your home screen.</string>
-    <string name="icon_black">Black (light backgrounds)</string>
+    <string name="dnd_access_title">DND access</string>
+    <string name="notifications_title">Notifications</string>
+    <string name="notifications_description">Allow notifications to use the pause buttons in the notification shade. Monitoring works without this permission.</string>
+    <string name="allow_notifications">Allow notifications</string>
+    <string name="quick_tile_title">Quick Settings tile</string>
+    <string name="quick_tile_status">Optional shortcut</string>
+    <string name="allowed">Allowed</string>
+    <string name="action_required">Action required</string>
+
+    <string name="icon_style_title">App icon</string>
+    <string name="icon_style_summary">Choose black or white</string>
+    <string name="icon_style_description">Select a style, then leave the app. Your launcher can take a few seconds to show the new icon.</string>
+    <string name="icon_black">Black on white</string>
     <string name="icon_white">White on black</string>
+    <string name="icon_change_pending">Icon will change after you leave the app.</string>
+    <string name="icon_change_failed">Could not change the app icon.</string>
 </resources>

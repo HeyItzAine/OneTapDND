@@ -13,76 +13,78 @@ class DndController(private val context: Context) {
     private val manager = context.getSystemService(NotificationManager::class.java)
     private val store = PlaceStore(context)
     private val preferences = store.preferences
-    val hasAccess: Boolean get() = manager.isNotificationPolicyAccessGranted
-    private fun uri(key: String) = Uri.parse("condition://${context.packageName}/$key")
-    private val keys = listOf("manual", "places", "silence")
+    val hasAccess: Boolean
+        get() = manager.isNotificationPolicyAccessGranted
 
-    private fun requested(key: String): Boolean {
-        val active = store.state().active(store.rules())
-        return when (key) {
-            "manual" -> preferences.getBoolean("manual", false)
-            "places" -> active.any { !it.totalSilence }
-            "silence" -> active.any { it.totalSilence }
-            else -> false
-        }
+    private fun uri(key: String) = Uri.parse("condition://${context.packageName}/$key")
+
+    private fun requested(key: String): Boolean = when (key) {
+        KEY_MANUAL -> preferences.getBoolean(KEY_MANUAL, false)
+        KEY_PLACES -> !store.isPaused() &&
+            PlaceMonitoring.hasPreciseLocation(context) &&
+            PlaceMonitoring.hasBackgroundLocation(context) &&
+            PlaceMonitoring.locationEnabled(context) &&
+            store.state().active(store.rules()).isNotEmpty()
+        else -> false
     }
+
+    fun isPlaceDndRequested(): Boolean = requested(KEY_PLACES)
 
     fun isOn(): Boolean {
         if (!hasAccess) return false
         if (manager.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_ALL) return false
         val owned = manager.automaticZenRules
-        if (Build.VERSION.SDK_INT >= 35 && !preferences.getBoolean("explicit_rules", false) &&
-            owned.any { (id, rule) -> rule.conditionId !in keys.map { uri(it) } &&
-                rule.isEnabled && manager.getAutomaticZenRuleState(id) == Condition.STATE_TRUE }) return true
-        return keys.any { key ->
+        return KEYS.any { key ->
             val entry = owned.entries.firstOrNull { it.value.conditionId == uri(key) }
             entry != null && entry.value.isEnabled &&
                 if (Build.VERSION.SDK_INT >= 35) {
                     manager.getAutomaticZenRuleState(entry.key) == Condition.STATE_TRUE
-                } else requested(key) &&
-                    manager.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL
+                } else {
+                    requested(key)
+                }
         }
     }
 
     fun toggle() {
         check(hasAccess)
-        val turnOn = !isOn()
-        preferences.edit().putBoolean("manual", turnOn).commit()
-        if (!turnOn) {
-            val state = store.state()
-            store.saveState(state.copy(paused = state.paused + state.inside))
-        }
+        preferences.edit().putBoolean(KEY_MANUAL, !preferences.getBoolean(KEY_MANUAL, false)).commit()
         sync(userAction = true)
     }
 
     fun condition(id: Uri, userAction: Boolean = false): Condition {
-        val state = if (requested(id.lastPathSegment.orEmpty())) Condition.STATE_TRUE else Condition.STATE_FALSE
+        val state = if (requested(id.lastPathSegment.orEmpty())) {
+            Condition.STATE_TRUE
+        } else {
+            Condition.STATE_FALSE
+        }
         return if (Build.VERSION.SDK_INT >= 35) {
-            Condition(id, "One Tap DND", state,
-                if (userAction) Condition.SOURCE_USER_ACTION else Condition.SOURCE_CONTEXT)
-        } else Condition(id, "One Tap DND", state)
+            Condition(
+                id,
+                "One Tap DND",
+                state,
+                if (userAction) Condition.SOURCE_USER_ACTION else Condition.SOURCE_CONTEXT
+            )
+        } else {
+            Condition(id, "One Tap DND", state)
+        }
     }
 
     fun sync(userAction: Boolean = false) {
         if (!hasAccess) return
-        // Retire the implicit rule used by v1.0 without touching other apps' rules.
-        if (Build.VERSION.SDK_INT >= 35 && !preferences.getBoolean("explicit_rules", false)) {
-            if (manager.automaticZenRules.values.any { it.conditionId !in keys.map { key -> uri(key) } }) {
-                manager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
-            }
-            preferences.edit().putBoolean("explicit_rules", true).commit()
-        }
+        retireLegacySilenceRule()
         val owned = manager.automaticZenRules
-        keys.forEach { key ->
+        KEYS.forEach { key ->
             val entry = owned.entries.firstOrNull { it.value.conditionId == uri(key) }
             var id = entry?.key
             if (id == null && requested(key)) {
                 @Suppress("DEPRECATION")
                 val rule = AutomaticZenRule(
-                    when (key) { "manual" -> "One Tap DND"; "places" -> "Quiet places"; else -> "Quiet places: total silence" },
-                    ComponentName(context, DndConditionService::class.java), uri(key),
-                    if (key == "silence") NotificationManager.INTERRUPTION_FILTER_NONE
-                    else NotificationManager.INTERRUPTION_FILTER_PRIORITY, true)
+                    if (key == KEY_MANUAL) "One Tap DND" else "Quiet places",
+                    ComponentName(context, DndConditionService::class.java),
+                    uri(key),
+                    NotificationManager.INTERRUPTION_FILTER_PRIORITY,
+                    true
+                )
                 id = manager.addAutomaticZenRule(rule)
             } else if (entry != null && userAction && requested(key) && !entry.value.isEnabled) {
                 entry.value.isEnabled = true
@@ -94,18 +96,41 @@ class DndController(private val context: Context) {
         }
         if (Build.VERSION.SDK_INT < 29) DndConditionService.publish(context)
     }
+
+    private fun retireLegacySilenceRule() {
+        manager.automaticZenRules.entries
+            .firstOrNull { it.value.conditionId == uri(KEY_LEGACY_SILENCE) }
+            ?.let { manager.removeAutomaticZenRule(it.key) }
+    }
+
+    companion object {
+        const val KEY_MANUAL = "manual"
+        const val KEY_PLACES = "places"
+        private const val KEY_LEGACY_SILENCE = "silence"
+        val KEYS = listOf(KEY_MANUAL, KEY_PLACES)
+    }
 }
 
 class DndConditionService : ConditionProviderService() {
-    override fun onConnected() { instance = this; publish(this) }
+    override fun onConnected() {
+        instance = this
+        publish(this)
+    }
+
     override fun onSubscribe(conditionId: Uri) {
         notifyCondition(DndController(this).condition(conditionId))
     }
+
     override fun onUnsubscribe(conditionId: Uri) = Unit
-    override fun onDestroy() { if (instance === this) instance = null; super.onDestroy() }
+
+    override fun onDestroy() {
+        if (instance === this) instance = null
+        super.onDestroy()
+    }
 
     companion object {
         private var instance: DndConditionService? = null
+
         fun publish(context: Context) {
             val service = instance
             if (service == null) {
@@ -113,9 +138,12 @@ class DndConditionService : ConditionProviderService() {
                     requestRebind(ComponentName(context, DndConditionService::class.java))
                 }
             } else {
-                listOf("manual", "places", "silence").forEach {
-                    service.notifyCondition(DndController(context).condition(
-                        Uri.parse("condition://${context.packageName}/$it")))
+                DndController.KEYS.forEach { key ->
+                    service.notifyCondition(
+                        DndController(context).condition(
+                            Uri.parse("condition://${context.packageName}/$key")
+                        )
+                    )
                 }
             }
         }

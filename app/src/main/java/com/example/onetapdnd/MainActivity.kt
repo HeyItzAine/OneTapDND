@@ -1,5 +1,6 @@
 package com.example.onetapdnd
 
+import android.Manifest
 import android.app.NotificationManager
 import android.app.StatusBarManager
 import android.content.ComponentName
@@ -12,7 +13,11 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,15 +27,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -38,10 +46,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.onetapdnd.ui.theme.OneTapDNDTheme
 
@@ -49,24 +62,34 @@ enum class IconStyle { BLACK, WHITE }
 
 class MainActivity : ComponentActivity() {
 
-    private var permissionGranted by mutableStateOf(false)
+    private var dndGranted by mutableStateOf(false)
+    private var notificationsGranted by mutableStateOf(false)
     private var selectedIcon by mutableStateOf(IconStyle.BLACK)
+    private var pendingIconStyle: IconStyle? = null
+
+    private val notificationPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        notificationsGranted = granted
+        MonitoringCoordinator(this).reconcile()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        selectedIcon = currentIconStyle()
+        selectedIcon = requestedIconStyle()
+        reconcileIconAliases(selectedIcon)
         enableEdgeToEdge()
         setContent {
             OneTapDNDTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     SetupScreen(
-                        permissionGranted = permissionGranted,
+                        dndGranted = dndGranted,
+                        notificationsGranted = notificationsGranted,
                         selectedIcon = selectedIcon,
-                        onGrantPermission = { openDndPermissionSettings() },
+                        onGrantDnd = { openDndPermissionSettings() },
+                        onGrantNotifications = { requestNotificationPermission() },
                         onAddTile = { requestTileAddition() },
-                        onIconStyleSelected = { style ->
-                            if (applyIconStyle(style)) selectedIcon = style
-                        },
+                        onIconStyleSelected = { requestIconStyle(it) },
                         placesContent = { QuietPlaces() },
                         modifier = Modifier.padding(innerPadding)
                     )
@@ -77,18 +100,37 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        val nm = getSystemService(NotificationManager::class.java)
-        permissionGranted = nm.isNotificationPolicyAccessGranted
+        dndGranted = getSystemService(NotificationManager::class.java)
+            .isNotificationPolicyAccessGranted
+        notificationsGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        runCatching {
+            MonitoringCoordinator(this).reconcile()
+            if (PlaceStore(this).rules().isNotEmpty()) PlaceMonitoring.schedule(this)
+        }
+    }
+
+    override fun onStop() {
+        pendingIconStyle?.let {
+            pendingIconStyle = null
+            applyIconStyle(it)
+        }
+        super.onStop()
     }
 
     private fun openDndPermissionSettings() {
         startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
     }
 
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     private fun requestTileAddition() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val statusBarManager = getSystemService(StatusBarManager::class.java)
-            statusBarManager.requestAddTileService(
+            getSystemService(StatusBarManager::class.java).requestAddTileService(
                 ComponentName(this, DndTileService::class.java),
                 getString(R.string.tile_label),
                 android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_dnd),
@@ -97,11 +139,25 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun requestIconStyle(style: IconStyle) {
+        selectedIcon = style
+        getSharedPreferences(ICON_PREFERENCES, MODE_PRIVATE)
+            .edit()
+            .putString(ICON_STYLE_KEY, style.name)
+            .apply()
+        pendingIconStyle = style
+        Toast.makeText(this, R.string.icon_change_pending, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun requestedIconStyle(): IconStyle {
+        val saved = getSharedPreferences(ICON_PREFERENCES, MODE_PRIVATE)
+            .getString(ICON_STYLE_KEY, null)
+        return runCatching { IconStyle.valueOf(saved.orEmpty()) }.getOrNull()
+            ?: currentIconStyle()
+    }
+
     private fun currentIconStyle(): IconStyle {
-        val pm = packageManager
-        val whiteEnabled = pm.getComponentEnabledSetting(
-            launcherAlias("MainActivityWhiteIcon")
-        ) == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+        val whiteEnabled = isComponentEnabled(launcherAlias(WHITE_ALIAS))
         return if (whiteEnabled) IconStyle.WHITE else IconStyle.BLACK
     }
 
@@ -110,17 +166,36 @@ class MainActivity : ComponentActivity() {
         return ComponentName(this, "$basePackage.$simpleName")
     }
 
-    private fun applyIconStyle(style: IconStyle): Boolean {
-        val pm = packageManager
-        val blackAlias = launcherAlias("MainActivityBlackIcon")
-        val whiteAlias = launcherAlias("MainActivityWhiteIcon")
+    private fun reconcileIconAliases(style: IconStyle) {
+        val blackAlias = launcherAlias(BLACK_ALIAS)
+        val whiteAlias = launcherAlias(WHITE_ALIAS)
+        val desired = if (style == IconStyle.BLACK) blackAlias else whiteAlias
+        val other = if (style == IconStyle.BLACK) whiteAlias else blackAlias
+        if (!isComponentEnabled(desired) || isComponentEnabled(other)) {
+            applyIconStyle(style, showFailure = false)
+        }
+    }
+
+    private fun isComponentEnabled(component: ComponentName): Boolean {
+        return when (packageManager.getComponentEnabledSetting(component)) {
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED -> true
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER,
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED -> false
+            else -> packageManager.getActivityInfo(component, 0).isEnabled
+        }
+    }
+
+    private fun applyIconStyle(style: IconStyle, showFailure: Boolean = true) {
+        val blackAlias = launcherAlias(BLACK_ALIAS)
+        val whiteAlias = launcherAlias(WHITE_ALIAS)
         val (enableAlias, disableAlias) = when (style) {
             IconStyle.BLACK -> blackAlias to whiteAlias
             IconStyle.WHITE -> whiteAlias to blackAlias
         }
-        return runCatching {
+        runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                pm.setComponentEnabledSettings(
+                packageManager.setComponentEnabledSettings(
                     listOf(
                         PackageManager.ComponentEnabledSetting(
                             enableAlias,
@@ -135,35 +210,39 @@ class MainActivity : ComponentActivity() {
                     )
                 )
             } else {
-                pm.setComponentEnabledSetting(
+                packageManager.setComponentEnabledSetting(
                     enableAlias,
                     PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
                     PackageManager.DONT_KILL_APP
                 )
-                pm.setComponentEnabledSetting(
+                packageManager.setComponentEnabledSetting(
                     disableAlias,
                     PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
                     PackageManager.DONT_KILL_APP
                 )
             }
-        }.fold(
-            onSuccess = {
-                Toast.makeText(this, "Icon changed. Your launcher may take a few seconds to refresh.", Toast.LENGTH_SHORT).show()
-                true
-            },
-            onFailure = {
-                Toast.makeText(this, "Could not change the app icon.", Toast.LENGTH_LONG).show()
-                false
+        }.onFailure {
+            if (showFailure) {
+                Toast.makeText(this, R.string.icon_change_failed, Toast.LENGTH_LONG).show()
             }
-        )
+        }
+    }
+
+    private companion object {
+        const val ICON_PREFERENCES = "launcher_icon"
+        const val ICON_STYLE_KEY = "style"
+        const val BLACK_ALIAS = "MainActivityBlackIcon"
+        const val WHITE_ALIAS = "MainActivityWhiteIcon"
     }
 }
 
 @Composable
 fun SetupScreen(
-    permissionGranted: Boolean,
+    dndGranted: Boolean,
+    notificationsGranted: Boolean,
     selectedIcon: IconStyle,
-    onGrantPermission: () -> Unit,
+    onGrantDnd: () -> Unit,
+    onGrantNotifications: () -> Unit,
     onAddTile: () -> Unit,
     onIconStyleSelected: (IconStyle) -> Unit,
     modifier: Modifier = Modifier,
@@ -173,112 +252,186 @@ fun SetupScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
+            .padding(horizontal = 20.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Top
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Spacer(modifier = Modifier.height(32.dp))
-
-        androidx.compose.material3.Icon(
-            painter = painterResource(id = R.drawable.ic_dnd),
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = stringResource(R.string.setup_title),
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = stringResource(R.string.setup_description),
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Step 1: Permission
-        SetupCard(
-            title = stringResource(R.string.step1_title),
-            description = stringResource(R.string.step1_description)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (permissionGranted) {
-                Text(
-                    text = stringResource(R.string.permission_granted),
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Medium
-                )
-            } else {
-                Button(onClick = onGrantPermission) {
-                    Text(stringResource(R.string.grant_permission))
-                }
-            }
+            Icon(
+                painter = painterResource(id = R.drawable.ic_dnd),
+                contentDescription = null,
+                modifier = Modifier.size(44.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = stringResource(R.string.setup_title),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Step 2: Add tile
-        SetupCard(
-            title = stringResource(R.string.step2_title),
-            description = stringResource(R.string.step2_description)
-        ) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                Button(
-                    onClick = onAddTile,
-                    enabled = permissionGranted
-                ) {
-                    Text(stringResource(R.string.add_tile))
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
+        StatusCard(
+            title = stringResource(R.string.dnd_access_title),
+            status = if (dndGranted) stringResource(R.string.allowed) else stringResource(R.string.action_required),
+            detail = stringResource(R.string.step1_description),
+            actionLabel = if (dndGranted) null else stringResource(R.string.grant_permission),
+            onAction = onGrantDnd
+        )
+        StatusCard(
+            title = stringResource(R.string.notifications_title),
+            status = if (notificationsGranted) stringResource(R.string.allowed) else stringResource(R.string.action_required),
+            detail = stringResource(R.string.notifications_description),
+            actionLabel = if (notificationsGranted || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) null
+                else stringResource(R.string.allow_notifications),
+            onAction = onGrantNotifications
+        )
+        StatusCard(
+            title = stringResource(R.string.quick_tile_title),
+            status = stringResource(R.string.quick_tile_status),
+            detail = stringResource(R.string.step2_description),
+            actionLabel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                stringResource(R.string.add_tile) else null,
+            onAction = onAddTile
+        )
 
         placesContent()
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Icon style picker
-        SetupCard(
+        CollapsibleCard(
             title = stringResource(R.string.icon_style_title),
-            description = stringResource(R.string.icon_style_description)
+            summary = stringResource(R.string.icon_style_summary),
+            detail = stringResource(R.string.icon_style_description)
         ) {
-            val options = listOf(IconStyle.BLACK, IconStyle.WHITE)
-            val labels = listOf(
-                stringResource(R.string.icon_black),
-                stringResource(R.string.icon_white)
-            )
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                options.forEachIndexed { index, style ->
-                    SegmentedButton(
-                        selected = selectedIcon == style,
-                        onClick = { onIconStyleSelected(style) },
-                        shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
-                        icon = {}
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                            Text(labels[index], modifier = Modifier.weight(1f))
-                            SegmentedButtonDefaults.Icon(active = selectedIcon == style)
-                        }
-                    }
-                }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                IconStyleRow(
+                    label = stringResource(R.string.icon_black),
+                    style = IconStyle.BLACK,
+                    selected = selectedIcon == IconStyle.BLACK,
+                    onClick = { onIconStyleSelected(IconStyle.BLACK) }
+                )
+                IconStyleRow(
+                    label = stringResource(R.string.icon_white),
+                    style = IconStyle.WHITE,
+                    selected = selectedIcon == IconStyle.WHITE,
+                    onClick = { onIconStyleSelected(IconStyle.WHITE) }
+                )
             }
         }
+        Spacer(Modifier.height(8.dp))
+    }
+}
 
-        if (permissionGranted) {
-            Spacer(modifier = Modifier.height(16.dp))
+@Composable
+private fun StatusCard(
+    title: String,
+    status: String,
+    detail: String,
+    actionLabel: String?,
+    onAction: () -> Unit
+) {
+    CollapsibleCard(
+        title = title,
+        summary = status,
+        detail = detail,
+        alwaysContent = {
+        if (actionLabel != null) {
+            Button(onClick = onAction) { Text(actionLabel) }
+        }
+        }
+    )
+}
 
-            SetupCard(
-                title = stringResource(R.string.done_title),
-                description = stringResource(R.string.done_description)
+@Composable
+fun CollapsibleCard(
+    title: String,
+    summary: String,
+    detail: String,
+    modifier: Modifier = Modifier,
+    initiallyExpanded: Boolean = false,
+    alwaysContent: @Composable (() -> Unit)? = null,
+    content: @Composable (() -> Unit)? = null
+) {
+    var expanded by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(initiallyExpanded) }
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .semantics {
+                        role = Role.Button
+                        contentDescription = "$title information"
+                        stateDescription = if (expanded) "Expanded" else "Collapsed"
+                    },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(summary, style = MaterialTheme.typography.bodyMedium)
+                }
+                Text(if (expanded) "⌃" else "ⓘ", style = MaterialTheme.typography.titleLarge)
+            }
+            alwaysContent?.invoke()
+            if (expanded) {
+                HorizontalDivider()
+                Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                content?.invoke()
+            }
+        }
+    }
+}
+
+@Composable
+private fun IconStyleRow(
+    label: String,
+    style: IconStyle,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    OutlinedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(72.dp)
+            .clickable(onClick = onClick),
+        border = BorderStroke(
+            if (selected) 2.dp else 1.dp,
+            if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+        ),
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer
+            else MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(18.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            IconPreview(style)
+            Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+            Text(if (selected) "✓" else "", style = MaterialTheme.typography.titleLarge)
+        }
+    }
+}
+
+@Composable
+private fun IconPreview(style: IconStyle) {
+    val background = if (style == IconStyle.BLACK) Color.White else Color.Black
+    val foreground = if (style == IconStyle.BLACK) Color.Black else Color.White
+    Surface(modifier = Modifier.size(44.dp), shape = CircleShape, color = background) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                painter = painterResource(R.drawable.ic_dnd_black),
+                contentDescription = null,
+                modifier = Modifier.size(30.dp),
+                tint = foreground
             )
         }
     }
@@ -293,26 +446,12 @@ fun SetupCard(
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            if (action != null) {
-                Spacer(modifier = Modifier.height(12.dp))
-                action()
-            }
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            action?.invoke()
         }
     }
 }

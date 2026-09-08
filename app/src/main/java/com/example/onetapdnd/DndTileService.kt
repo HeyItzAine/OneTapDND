@@ -43,8 +43,25 @@ class DndTileService : TileService() {
 
     private fun toggle() {
         try {
+            val store = PlaceStore(this)
+            val coordinator = MonitoringCoordinator(this)
+            when {
+                store.isPaused() -> {
+                    coordinator.resumeNow()
+                    updateTileState()
+                    return
+                }
+                !DndController(this).hasAccess -> {
+                    openSettings()
+                    return
+                }
+                store.state().active(store.rules()).isNotEmpty() -> {
+                    coordinator.pauseFor(60)
+                    updateTileState()
+                    return
+                }
+            }
             val controller = DndController(this)
-            if (!controller.hasAccess) { openSettings(); return }
             controller.toggle()
             updateTileState()
         } catch (_: SecurityException) {
@@ -73,14 +90,20 @@ class DndTileService : TileService() {
 
     private fun updateTileState() {
         val tile = qsTile ?: return
+        runCatching { MonitoringCoordinator(this).reconcile() }
+        val store = PlaceStore(this)
+        val paused = store.isPaused()
+        val insidePlace = !paused && store.state().active(store.rules()).isNotEmpty()
         val controller = DndController(this)
         val hasAccess = controller.hasAccess
         val on = runCatching { controller.isOn() }.getOrDefault(false)
-        tile.state = if (on) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
+        tile.state = if (!paused && (insidePlace || on)) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
         val manager = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 29) {
             tile.subtitle = when {
+                paused -> "Paused · tap to resume"
                 !hasAccess -> getString(R.string.tile_tap_to_setup)
+                insidePlace -> "Quiet place · tap to pause 1h"
                 on -> getString(R.string.tile_on)
                 manager.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL -> "Other mode active"
                 else -> getString(R.string.tile_off)

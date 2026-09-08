@@ -18,16 +18,23 @@ The tile controls this app's rules. DND enabled by another Android mode can rema
 
 Choose **Add place**, search an address, read one from a screenshot, use your current location, or enter coordinates copied from a Google Maps pin. The screenshot reader recognizes addresses, place names, plus codes, and common coordinate formats, then fills the form and looks up the pin. Check the extracted text and preview the position before saving. Set a radius from **100 to 10,000 meters**; 200 meters is a practical starting point.
 
-Choose DND for priority interruptions, or enable **Total silence** to also mute media and alarms. In-call audio is unaffected. Leaving the area ends that place's mode. Other active places and manually enabled modes remain in effect. Turning the tile off pauses places you are currently inside until you leave and return.
+Each place has one of three modes: **DND only**, **DND + silent**, or **DND + silent + media at zero**. The strongest mode wins when places overlap. The third mode holds media volume at zero while you remain inside; alarms and call audio are not changed. Leaving every active place restores the ringer mode and media volume that were present before place automation changed them. A newer manual change is preserved when restoration can identify it.
+
+Quiet-place monitoring can be paused for one hour, three hours, or a custom duration from 15 minutes to 24 hours. The silent status notification provides all three pause actions. While paused, geofences and place-owned audio changes are released; monitoring resumes after the deadline. In Quick Settings, tapping while inside a saved place pauses monitoring for one hour, and tapping while paused resumes it immediately. Away from saved places, the tile continues to control manual DND.
 
 Grant precise location first, then choose **Allow all the time** in the app's location permission settings. Keep device Location and Google Location Accuracy on. Google Play services is required for place monitoring. Saved places are registered again after reboot, an app update, or reopening the app. Android can take a few minutes to report arrivals and departures. Force-stopping the app stops monitoring until you open it again.
 
-Places can be edited, disabled, or deleted. While the app is open, each saved place shows its radius and the phone's current distance from its pin. The app shows monitoring failures and provides a Retry button. Disabling or deleting a place ends its active mode.
+The app keeps Android geofences as the primary low-power detector and runs one adaptive distance check as a fallback. At the baseline travel estimate, a place 1 km away is checked again in 5 minutes, a place 12 km away in 1 hour, and a trip longer than one day is capped at one check per day. A measured speed above the baseline shortens the next delay. Android can defer background work in Doze or under manufacturer battery restrictions, so these times are targets rather than exact alarms.
+
+Places can be edited, disabled, or deleted. Search, screenshot recognition, pasted multiline addresses, current location, and the map picker can supply coordinates without changing the user-defined place name. The full-screen editor keeps map preview and manual coordinates under **Advanced location**. While the app is open, each saved place shows its radius and the phone's current distance from its pin. The app shows monitoring failures and provides a Retry button. Disabling or deleting a place ends its active mode.
 
 ## Permissions and data
 
 - **DND access:** controls the app's DND rules. The tile works without location permission.
 - **Precise and background location:** detect arrivals and departures for quiet places, including when the app is closed.
+- **Notifications:** shows quiet-place status and pause controls. Denying it does not disable monitoring.
+- **Audio settings:** applies silent mode and media-zero modes selected for saved places.
+- **Foreground service:** enforces media volume zero only while that place mode is active.
 - **Internet:** supports address lookup and the location services dependency.
 - **Boot completed:** restores place monitoring after restarting the phone.
 
