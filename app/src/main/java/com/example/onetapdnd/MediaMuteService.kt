@@ -19,7 +19,9 @@ class MediaMuteService : Service() {
     private val watchdog = object : Runnable {
         override fun run() {
             enforceMediaZero()
-            if (!audioManager.isVolumeFixed) handler.postDelayed(this, WATCHDOG_INTERVAL_MS)
+            if (runCatching { !audioManager.isVolumeFixed }.getOrDefault(false)) {
+                handler.postDelayed(this, WATCHDOG_INTERVAL_MS)
+            }
         }
     }
     private val volumeObserver = object : ContentObserver(handler) {
@@ -31,23 +33,31 @@ class MediaMuteService : Service() {
     override fun onCreate() {
         super.onCreate()
         audioManager = getSystemService(AudioManager::class.java)
-        startForeground(
-            MonitoringNotification.MEDIA_SERVICE_ID,
-            MonitoringNotification.buildMediaService(this)
-        )
+        val foregroundStarted = runCatching {
+            startForeground(
+                MonitoringNotification.MEDIA_SERVICE_ID,
+                MonitoringNotification.buildMediaService(this)
+            )
+        }.isSuccess
+        if (!foregroundStarted) {
+            stopSelf()
+            return
+        }
         if (audioManager.isVolumeFixed) {
             PlaceStore(this).status("This device does not allow apps to change media volume.")
             MonitoringNotification.update(this)
             stopSelf()
             return
         }
-        contentResolver.registerContentObserver(Settings.System.CONTENT_URI, true, volumeObserver)
-        observerRegistered = true
+        observerRegistered = runCatching {
+            contentResolver.registerContentObserver(Settings.System.CONTENT_URI, true, volumeObserver)
+            true
+        }.getOrDefault(false)
         handler.post(watchdog)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (!shouldEnforce()) {
+        if (!runCatching { shouldEnforce() }.getOrDefault(false)) {
             stopSelf()
             return START_NOT_STICKY
         }
@@ -57,7 +67,7 @@ class MediaMuteService : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacks(watchdog)
-        if (observerRegistered) contentResolver.unregisterContentObserver(volumeObserver)
+        if (observerRegistered) runCatching { contentResolver.unregisterContentObserver(volumeObserver) }
         super.onDestroy()
     }
 
@@ -69,13 +79,17 @@ class MediaMuteService : Service() {
     }
 
     private fun enforceMediaZero() {
-        if (!shouldEnforce()) {
-            stopSelf()
-            return
-        }
-        if (!audioManager.isVolumeFixed && audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) != 0) {
-            runCatching { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0) }
-        }
+        runCatching {
+            if (!shouldEnforce()) {
+                stopSelf()
+                return
+            }
+            if (!audioManager.isVolumeFixed &&
+                audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) != 0
+            ) {
+                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
+            }
+        }.onFailure { stopSelf() }
     }
 
     companion object {

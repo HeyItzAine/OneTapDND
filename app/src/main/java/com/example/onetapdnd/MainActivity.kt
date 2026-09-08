@@ -71,7 +71,7 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         notificationsGranted = granted
-        MonitoringCoordinator(this).reconcile()
+        runCatching { MonitoringCoordinator(this).reconcile() }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -153,7 +153,7 @@ class MainActivity : ComponentActivity() {
         val saved = getSharedPreferences(ICON_PREFERENCES, MODE_PRIVATE)
             .getString(ICON_STYLE_KEY, null)
         return runCatching { IconStyle.valueOf(saved.orEmpty()) }.getOrNull()
-            ?: currentIconStyle()
+            ?: runCatching { currentIconStyle() }.getOrDefault(IconStyle.BLACK)
     }
 
     private fun currentIconStyle(): IconStyle {
@@ -171,8 +171,11 @@ class MainActivity : ComponentActivity() {
         val whiteAlias = launcherAlias(WHITE_ALIAS)
         val desired = if (style == IconStyle.BLACK) blackAlias else whiteAlias
         val other = if (style == IconStyle.BLACK) whiteAlias else blackAlias
-        if (!isComponentEnabled(desired) || isComponentEnabled(other)) {
-            applyIconStyle(style, showFailure = false)
+        val aliasesCorrect = runCatching {
+            isComponentEnabled(desired) && !isComponentEnabled(other)
+        }.getOrDefault(false)
+        if (!aliasesCorrect) {
+            pendingIconStyle = style
         }
     }
 
