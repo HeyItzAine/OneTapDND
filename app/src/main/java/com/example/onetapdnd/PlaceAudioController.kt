@@ -30,6 +30,12 @@ class PlaceAudioController(context: Context) {
         }
     }
 
+    fun enforceRingerSilence() {
+        if (audioManager.ringerMode == AudioManager.RINGER_MODE_SILENT) return
+        val snapshot = applyRingerSilence(store.audioSnapshot())
+        store.saveAudioSnapshot(snapshot)
+    }
+
     private fun applyRingerSilence(snapshot: AudioSnapshot): AudioSnapshot {
         val current = audioManager.ringerMode
         val original = ringerOriginalForApply(snapshot, current)

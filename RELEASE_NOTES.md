@@ -1,9 +1,10 @@
 Download **OneTapDND.apk** below and open it on your Android phone to install.
 
+- Full DND mode now keeps the phone ringer silent as well as holding media volume at zero.
 - Launcher alias repair now waits until the app leaves the foreground, avoiding package restarts during app startup on affected devices.
 - Media-zero enforcement now stops safely if Android rejects foreground-service startup or its settings observer.
 
-**Upgrading from v1.1, v1.1.1, v1.2, v1.3, or v1.4:** install this APK over the existing app. It uses the same signing key and keeps your settings.
+**Upgrading from v1.1 through v1.4.1:** install this APK over the existing app. It uses the same signing key and keeps your settings.
 
 **Upgrading from v1.0:** uninstall v1.0 first because its signing key differs, then grant DND access and add the tile again.
 
