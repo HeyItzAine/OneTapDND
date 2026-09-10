@@ -51,5 +51,11 @@ data class AudioSnapshot(
     val originalRingerMode: Int? = null,
     val appliedRingerMode: Int? = null,
     val originalMediaVolume: Int? = null,
-    val appliedMediaVolume: Int? = null
+    val appliedMediaVolume: Int? = null,
+    val originalRingVolume: Int? = null,
+    val appliedRingVolume: Int? = null,
+    val originalNotificationVolume: Int? = null,
+    val appliedNotificationVolume: Int? = null,
+    val originalSystemVolume: Int? = null,
+    val appliedSystemVolume: Int? = null
 )

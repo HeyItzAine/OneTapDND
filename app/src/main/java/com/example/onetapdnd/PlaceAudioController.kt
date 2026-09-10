@@ -31,35 +31,116 @@ class PlaceAudioController(context: Context) {
     }
 
     fun enforceRingerSilence() {
-        if (audioManager.ringerMode == AudioManager.RINGER_MODE_SILENT) return
-        val snapshot = applyRingerSilence(store.audioSnapshot())
-        store.saveAudioSnapshot(snapshot)
+        runCatching {
+            silenceRingerStreams()
+            if (audioManager.ringerMode != AudioManager.RINGER_MODE_SILENT) {
+                audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
+            }
+        }
+    }
+
+    private fun silenceRingerStreams() {
+        RINGER_STREAMS.forEach { stream ->
+            runCatching {
+                audioManager.adjustStreamVolume(stream, AudioManager.ADJUST_MUTE, 0)
+            }
+            if (!audioManager.isVolumeFixed) {
+                runCatching {
+                    if (audioManager.getStreamVolume(stream) != 0) {
+                        audioManager.setStreamVolume(stream, 0, 0)
+                    }
+                }
+            }
+        }
     }
 
     private fun applyRingerSilence(snapshot: AudioSnapshot): AudioSnapshot {
-        val current = audioManager.ringerMode
-        val original = ringerOriginalForApply(snapshot, current)
-        val applied = runCatching {
-            if (current != AudioManager.RINGER_MODE_SILENT) {
+        val currentRinger = audioManager.ringerMode
+        val originalRinger = ringerOriginalForApply(snapshot, currentRinger)
+
+        val currentRingVol = runCatching { audioManager.getStreamVolume(AudioManager.STREAM_RING) }.getOrNull()
+        val originalRingVol = snapshot.originalRingVolume ?: currentRingVol
+
+        val currentNotifVol = runCatching { audioManager.getStreamVolume(AudioManager.STREAM_NOTIFICATION) }.getOrNull()
+        val originalNotifVol = snapshot.originalNotificationVolume ?: currentNotifVol
+
+        val currentSystemVol = runCatching { audioManager.getStreamVolume(AudioManager.STREAM_SYSTEM) }.getOrNull()
+        val originalSystemVol = snapshot.originalSystemVolume ?: currentSystemVol
+
+        val appliedRinger = runCatching {
+            silenceRingerStreams()
+            if (currentRinger != AudioManager.RINGER_MODE_SILENT) {
                 audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
             }
             AudioManager.RINGER_MODE_SILENT
         }.getOrNull() ?: snapshot.appliedRingerMode
-        return snapshot.copy(originalRingerMode = original, appliedRingerMode = applied)
+
+        return snapshot.copy(
+            originalRingerMode = originalRinger,
+            appliedRingerMode = appliedRinger,
+            originalRingVolume = originalRingVol,
+            appliedRingVolume = if (appliedRinger != null) 0 else snapshot.appliedRingVolume,
+            originalNotificationVolume = originalNotifVol,
+            appliedNotificationVolume = if (appliedRinger != null) 0 else snapshot.appliedNotificationVolume,
+            originalSystemVolume = originalSystemVol,
+            appliedSystemVolume = if (appliedRinger != null) 0 else snapshot.appliedSystemVolume
+        )
     }
 
     private fun restoreRinger(snapshot: AudioSnapshot): AudioSnapshot {
-        val original = snapshot.originalRingerMode ?: return snapshot.copy(appliedRingerMode = null)
-        val applied = snapshot.appliedRingerMode
-        val current = audioManager.ringerMode
-        if (shouldRestoreSetting(original, applied, current)) {
-            val restored = runCatching {
-                audioManager.ringerMode = original
-                true
-            }.getOrDefault(false)
-            if (!restored) return snapshot
+        val originalRinger = snapshot.originalRingerMode
+        val appliedRinger = snapshot.appliedRingerMode
+
+        if (originalRinger == null &&
+            snapshot.originalRingVolume == null &&
+            snapshot.originalNotificationVolume == null &&
+            snapshot.originalSystemVolume == null
+        ) {
+            return snapshot.copy(
+                appliedRingerMode = null,
+                appliedRingVolume = null,
+                appliedNotificationVolume = null,
+                appliedSystemVolume = null
+            )
         }
-        return snapshot.copy(originalRingerMode = null, appliedRingerMode = null)
+
+        val currentRinger = audioManager.ringerMode
+
+        val restored = runCatching {
+            restoreStreamVolume(AudioManager.STREAM_RING, snapshot.originalRingVolume, snapshot.appliedRingVolume)
+            restoreStreamVolume(AudioManager.STREAM_NOTIFICATION, snapshot.originalNotificationVolume, snapshot.appliedNotificationVolume)
+            restoreStreamVolume(AudioManager.STREAM_SYSTEM, snapshot.originalSystemVolume, snapshot.appliedSystemVolume)
+
+            if (originalRinger != null && shouldRestoreRingerMode(originalRinger, appliedRinger, currentRinger)) {
+                audioManager.ringerMode = originalRinger
+            }
+            true
+        }.getOrDefault(false)
+
+        if (!restored) return snapshot
+
+        return snapshot.copy(
+            originalRingerMode = null,
+            appliedRingerMode = null,
+            originalRingVolume = null,
+            appliedRingVolume = null,
+            originalNotificationVolume = null,
+            appliedNotificationVolume = null,
+            originalSystemVolume = null,
+            appliedSystemVolume = null
+        )
+    }
+
+    private fun restoreStreamVolume(stream: Int, original: Int?, applied: Int?) {
+        runCatching {
+            audioManager.adjustStreamVolume(stream, AudioManager.ADJUST_UNMUTE, 0)
+            if (original != null && !audioManager.isVolumeFixed) {
+                val current = audioManager.getStreamVolume(stream)
+                if (shouldRestoreSetting(original, applied, current)) {
+                    audioManager.setStreamVolume(stream, original, 0)
+                }
+            }
+        }
     }
 
     private fun applyMediaZero(snapshot: AudioSnapshot): AudioSnapshot {
@@ -85,10 +166,24 @@ class PlaceAudioController(context: Context) {
         }
         return snapshot.copy(originalMediaVolume = null, appliedMediaVolume = null)
     }
+
+    companion object {
+        val RINGER_STREAMS = intArrayOf(
+            AudioManager.STREAM_RING,
+            AudioManager.STREAM_NOTIFICATION,
+            AudioManager.STREAM_SYSTEM
+        )
+    }
 }
 
 internal fun shouldRestoreSetting(original: Int, applied: Int?, current: Int): Boolean =
     applied != null && current == applied && current != original
+
+internal fun shouldRestoreRingerMode(original: Int, applied: Int?, current: Int): Boolean =
+    shouldRestoreSetting(original, applied, current) ||
+        (applied == AudioManager.RINGER_MODE_SILENT &&
+            current == AudioManager.RINGER_MODE_VIBRATE &&
+            original == AudioManager.RINGER_MODE_NORMAL)
 
 internal fun ringerOriginalForApply(snapshot: AudioSnapshot, current: Int): Int =
     if (snapshot.appliedRingerMode != null && current != snapshot.appliedRingerMode) {

@@ -98,7 +98,13 @@ class PlaceStore(context: Context) {
         originalRingerMode = preferences.optionalInt(KEY_ORIGINAL_RINGER),
         appliedRingerMode = preferences.optionalInt(KEY_APPLIED_RINGER),
         originalMediaVolume = preferences.optionalInt(KEY_ORIGINAL_MEDIA),
-        appliedMediaVolume = preferences.optionalInt(KEY_APPLIED_MEDIA)
+        appliedMediaVolume = preferences.optionalInt(KEY_APPLIED_MEDIA),
+        originalRingVolume = preferences.optionalInt(KEY_ORIGINAL_RING_VOL),
+        appliedRingVolume = preferences.optionalInt(KEY_APPLIED_RING_VOL),
+        originalNotificationVolume = preferences.optionalInt(KEY_ORIGINAL_NOTIF_VOL),
+        appliedNotificationVolume = preferences.optionalInt(KEY_APPLIED_NOTIF_VOL),
+        originalSystemVolume = preferences.optionalInt(KEY_ORIGINAL_SYSTEM_VOL),
+        appliedSystemVolume = preferences.optionalInt(KEY_APPLIED_SYSTEM_VOL)
     )
 
     fun saveAudioSnapshot(snapshot: AudioSnapshot) {
@@ -107,6 +113,12 @@ class PlaceStore(context: Context) {
             .putOptionalInt(KEY_APPLIED_RINGER, snapshot.appliedRingerMode)
             .putOptionalInt(KEY_ORIGINAL_MEDIA, snapshot.originalMediaVolume)
             .putOptionalInt(KEY_APPLIED_MEDIA, snapshot.appliedMediaVolume)
+            .putOptionalInt(KEY_ORIGINAL_RING_VOL, snapshot.originalRingVolume)
+            .putOptionalInt(KEY_APPLIED_RING_VOL, snapshot.appliedRingVolume)
+            .putOptionalInt(KEY_ORIGINAL_NOTIF_VOL, snapshot.originalNotificationVolume)
+            .putOptionalInt(KEY_APPLIED_NOTIF_VOL, snapshot.appliedNotificationVolume)
+            .putOptionalInt(KEY_ORIGINAL_SYSTEM_VOL, snapshot.originalSystemVolume)
+            .putOptionalInt(KEY_APPLIED_SYSTEM_VOL, snapshot.appliedSystemVolume)
             .commit()
     }
 
@@ -158,6 +170,12 @@ class PlaceStore(context: Context) {
         private const val KEY_APPLIED_RINGER = "audioAppliedRingerMode"
         private const val KEY_ORIGINAL_MEDIA = "audioOriginalMediaVolume"
         private const val KEY_APPLIED_MEDIA = "audioAppliedMediaVolume"
+        private const val KEY_ORIGINAL_RING_VOL = "audioOriginalRingVolume"
+        private const val KEY_APPLIED_RING_VOL = "audioAppliedRingVolume"
+        private const val KEY_ORIGINAL_NOTIF_VOL = "audioOriginalNotificationVolume"
+        private const val KEY_APPLIED_NOTIF_VOL = "audioAppliedNotificationVolume"
+        private const val KEY_ORIGINAL_SYSTEM_VOL = "audioOriginalSystemVolume"
+        private const val KEY_APPLIED_SYSTEM_VOL = "audioAppliedSystemVolume"
         private const val KEY_STATUS = "status"
         private const val KEY_ADAPTIVE_STATUS = "adaptiveCheckStatus"
         private const val KEY_NEXT_LOCATION_CHECK = "nextLocationCheckEpochMs"

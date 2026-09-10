@@ -146,4 +146,51 @@ class PlaceStateTest {
         assertEquals(2, ringerOriginalForApply(active, current = 0))
         assertEquals(2, ringerOriginalForApply(AudioSnapshot(), current = 2))
     }
+
+    @Test
+    fun ringerModeRestorationHandlesDirectAndDegradedSilence() {
+        // Direct restoration from silent to normal
+        assertTrue(shouldRestoreRingerMode(original = 2, applied = 0, current = 0))
+        // Degraded to vibrate on devices that don't support raw silent without vibrate
+        assertTrue(shouldRestoreRingerMode(original = 2, applied = 0, current = 1))
+        // Direct restoration from silent to vibrate when original was vibrate
+        assertTrue(shouldRestoreRingerMode(original = 1, applied = 0, current = 0))
+        // User manually turned on ringer (normal) while inside quiet place: do not overwrite
+        assertFalse(shouldRestoreRingerMode(original = 2, applied = 0, current = 2))
+        assertFalse(shouldRestoreRingerMode(original = 1, applied = 0, current = 2))
+        // If not applied by app, never restore
+        assertFalse(shouldRestoreRingerMode(original = 2, applied = null, current = 0))
+        // If already at original, nothing to restore
+        assertFalse(shouldRestoreRingerMode(original = 1, applied = 0, current = 1))
+    }
+
+    @Test
+    fun audioSnapshotTracksRingNotificationAndSystemVolumes() {
+        val snapshot = AudioSnapshot(
+            originalRingerMode = 2,
+            appliedRingerMode = 0,
+            originalMediaVolume = 10,
+            appliedMediaVolume = 0,
+            originalRingVolume = 7,
+            appliedRingVolume = 0,
+            originalNotificationVolume = 5,
+            appliedNotificationVolume = 0,
+            originalSystemVolume = 4,
+            appliedSystemVolume = 0
+        )
+        assertEquals(7, snapshot.originalRingVolume)
+        assertEquals(0, snapshot.appliedRingVolume)
+        assertEquals(5, snapshot.originalNotificationVolume)
+        assertEquals(0, snapshot.appliedNotificationVolume)
+        assertEquals(4, snapshot.originalSystemVolume)
+        assertEquals(0, snapshot.appliedSystemVolume)
+
+        val empty = AudioSnapshot()
+        assertNull(empty.originalRingVolume)
+        assertNull(empty.appliedRingVolume)
+        assertNull(empty.originalNotificationVolume)
+        assertNull(empty.appliedNotificationVolume)
+        assertNull(empty.originalSystemVolume)
+        assertNull(empty.appliedSystemVolume)
+    }
 }

@@ -79,19 +79,13 @@ class MediaMuteService : Service() {
     }
 
     private fun enforceFullSilence() {
-        runCatching {
-            if (!shouldEnforce()) {
-                stopSelf()
-                return
-            }
-            val audioController = PlaceAudioController(this)
-            audioController.enforceRingerSilence()
-            if (!audioManager.isVolumeFixed &&
-                audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) != 0
-            ) {
-                audioController.enforceMediaZero()
-            }
-        }.onFailure { stopSelf() }
+        if (!runCatching { shouldEnforce() }.getOrDefault(false)) {
+            stopSelf()
+            return
+        }
+        val audioController = PlaceAudioController(this)
+        audioController.enforceRingerSilence()
+        audioController.enforceMediaZero()
     }
 
     companion object {

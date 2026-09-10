@@ -1,12 +1,13 @@
 Download **OneTapDND.apk** below and open it on your Android phone to install.
 
-- Address and place search now accepts spaces normally, supports coordinate and Maps-link input, and retries simpler query forms when needed.
-- Quiet Places now links directly to the Android access required for DND and silent ringer changes.
-- Full DND mode now keeps the phone ringer silent as well as holding media volume at zero.
-- Launcher alias repair now waits until the app leaves the foreground, avoiding package restarts during app startup on affected devices.
-- Media-zero enforcement now stops safely if Android rejects foreground-service startup or its settings observer.
+- Quiet places with silent ringer modes now mute and zero the ring, notification, and system audio streams so calls and priority alerts stay silent, and restore them properly upon leaving.
+- Full DND mode (DND + Silent + Media 0) reliably enforces silent ringer and media-zero without corrupting saved volume settings in the background.
+- Address and place search accepts spaces normally, supports coordinate and Maps-link input, and retries simpler query forms when needed.
+- Quiet Places links directly to the Android access required for DND and silent ringer changes.
+- Launcher alias repair waits until the app leaves the foreground, avoiding package restarts during app startup on affected devices.
+- Media-zero enforcement stops safely if Android rejects foreground-service startup or its settings observer.
 
-**Upgrading from v1.1 through v1.4.2:** install this APK over the existing app. It uses the same signing key and keeps your settings.
+**Upgrading from v1.1 through v1.4.3:** install this APK over the existing app. It uses the same signing key and keeps your settings.
 
 **Upgrading from v1.0:** uninstall v1.0 first because its signing key differs, then grant DND access and add the tile again.
 
