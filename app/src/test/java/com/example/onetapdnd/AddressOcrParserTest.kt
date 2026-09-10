@@ -8,6 +8,36 @@ import org.junit.Test
 
 class AddressOcrParserTest {
     @Test
+    fun searchQueriesKeepWordsAndOfferFlexibleFallbacks() {
+        assertEquals(
+            listOf(
+                "Address: Central World, Bangkok | Thailand",
+                "Central World, Bangkok | Thailand",
+                "Central World Bangkok Thailand"
+            ),
+            AddressOcrParser.searchQueryCandidates("  Address: Central World, Bangkok | Thailand  ")
+        )
+        assertEquals(
+            listOf("coffee shop near central world"),
+            AddressOcrParser.searchQueryCandidates("coffee shop near central world ")
+        )
+    }
+
+    @Test
+    fun searchAcceptsCoordinatesAndMapLinksDirectly() {
+        assertEquals(
+            13.7466 to 100.5393,
+            AddressOcrParser.coordinatesFromSearchText("13.7466, 100.5393")
+        )
+        assertEquals(
+            13.7466 to 100.5393,
+            AddressOcrParser.coordinatesFromSearchText(
+                "https://maps.google.com/?query=13.7466%2C100.5393"
+            )
+        )
+    }
+
+    @Test
     fun extractsAddressAndNameFromNoisyMapsScreenshot() {
         val text = """
             19.17     8.01 KB/s  VoLTE  5G  45

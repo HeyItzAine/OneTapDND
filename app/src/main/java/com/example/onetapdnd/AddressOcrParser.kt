@@ -79,6 +79,28 @@ object AddressOcrParser {
         )
     }
 
+    fun coordinatesFromSearchText(value: String): Pair<Double, Double>? {
+        val lines = repairPlusCodes(value.take(MAX_TEXT_LENGTH))
+            .lineSequence()
+            .take(MAX_LINES)
+            .map(::cleanLine)
+            .filter { it.isNotBlank() }
+            .toList()
+        return findCoordinates(lines)
+    }
+
+    fun searchQueryCandidates(value: String): List<String> {
+        val normalized = normalizeSearchText(value)
+        if (normalized.isBlank()) return emptyList()
+        val withoutLabel = normalized.replace(addressPrefix, "").trim()
+        val withoutSeparators = withoutLabel.replace(Regex("""\s*[,;|]+\s*"""), " ")
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+        return listOf(normalized, withoutLabel, withoutSeparators)
+            .filter { it.isNotBlank() }
+            .distinct()
+    }
+
     /** Converts pasted or OCR line breaks into a stable Android Geocoder query. */
     fun normalizeSearchText(value: String): String = repairPlusCodes(
         value.take(MAX_TEXT_LENGTH)

@@ -32,11 +32,11 @@ class MainActivityUiTest {
         }
 
         compose.onAllNodesWithText(
-            "Android requires this access before One Tap DND can change Do Not Disturb."
+            "Android requires this access before One Tap DND can change Do Not Disturb or set the ringer to silent."
         ).assertCountEquals(0)
         compose.onNodeWithText("DND access").performClick()
         compose.onNodeWithText(
-            "Android requires this access before One Tap DND can change Do Not Disturb."
+            "Android requires this access before One Tap DND can change Do Not Disturb or set the ringer to silent."
         ).assertIsDisplayed()
     }
 

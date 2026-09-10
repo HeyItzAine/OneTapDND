@@ -9,7 +9,7 @@
     <string name="setup_description">DND controls and quiet places</string>
 
     <string name="step1_title">DND access</string>
-    <string name="step1_description">Android requires this access before One Tap DND can change Do Not Disturb.</string>
+    <string name="step1_description">Android requires this access before One Tap DND can change Do Not Disturb or set the ringer to silent.</string>
     <string name="grant_permission">Allow DND access</string>
     <string name="permission_granted">Permission granted</string>
 

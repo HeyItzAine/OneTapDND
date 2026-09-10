@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -64,6 +65,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -173,6 +175,10 @@ fun QuietPlaces() {
         )
     }
 
+    fun dndSettings() {
+        context.startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
+    }
+
     fun changed(updated: List<PlaceRule>) {
         feedback = null
         runCatching {
@@ -216,7 +222,11 @@ fun QuietPlaces() {
             }
 
             if (!hasDnd) {
-                Text("DND access is required before a place can change sound settings.", color = MaterialTheme.colorScheme.error)
+                Text(
+                    "DND access is off. Android will block DND and silent ringer changes until it is enabled.",
+                    color = MaterialTheme.colorScheme.error
+                )
+                Button(onClick = { dndSettings() }) { Text("Allow DND and silent access") }
             }
             if (!precise) {
                 Button(onClick = {
@@ -601,14 +611,16 @@ private fun PlaceEditor(
                         OutlinedTextField(
                             value = query,
                             onValueChange = {
-                                query = AddressOcrParser.normalizeSearchText(it)
-                                if (query != lastResolvedQuery) {
+                                query = it
+                                if (AddressOcrParser.normalizeSearchText(query) != lastResolvedQuery) {
                                     error = null
                                     notice = null
                                 }
                             },
                             label = { Text("Address, place, or plus code") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = { searchAddress(query) }),
                             modifier = Modifier.fillMaxWidth()
                         )
                         Button(
@@ -897,17 +909,31 @@ private fun formatDistance(meters: Float): String = when {
 
 private suspend fun geocode(context: android.content.Context, searchText: String): List<SearchPlace> {
     if (!Geocoder.isPresent()) throw IllegalStateException("Geocoder unavailable")
-    val normalized = AddressOcrParser.normalizeSearchText(searchText)
-    if (normalized.isBlank()) return emptyList()
+    AddressOcrParser.coordinatesFromSearchText(searchText)?.let { coordinates ->
+        return listOf(SearchPlace("Entered coordinates", coordinates.first, coordinates.second))
+    }
+    val candidates = AddressOcrParser.searchQueryCandidates(searchText)
+    if (candidates.isEmpty()) return emptyList()
     return withContext(Dispatchers.IO) {
-        @Suppress("DEPRECATION")
-        Geocoder(context).getFromLocationName(normalized, 5).orEmpty().map {
-            SearchPlace(
-                label = it.getAddressLine(0) ?: it.featureName ?: normalized,
-                latitude = it.latitude,
-                longitude = it.longitude
-            )
+        val geocoder = Geocoder(context)
+        var lastFailure: Throwable? = null
+        for (candidate in candidates) {
+            @Suppress("DEPRECATION")
+            val addresses = runCatching { geocoder.getFromLocationName(candidate, 5).orEmpty() }
+                .onFailure { lastFailure = it }
+                .getOrDefault(emptyList())
+            if (addresses.isNotEmpty()) {
+                return@withContext addresses.map {
+                    SearchPlace(
+                        label = it.getAddressLine(0) ?: it.featureName ?: candidate,
+                        latitude = it.latitude,
+                        longitude = it.longitude
+                    )
+                }
+            }
         }
+        lastFailure?.let { throw it }
+        emptyList()
     }
 }
 
