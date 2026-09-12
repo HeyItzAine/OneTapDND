@@ -53,6 +53,8 @@ jobs:
         run: |
           python3 scripts/check_release_apk.py app/build/outputs/apk/release/app-release.apk --dexdump "$ANDROID_HOME/build-tools/36.1.0/dexdump"
           "$ANDROID_HOME/build-tools/36.1.0/apksigner" verify app/build/outputs/apk/release/app-release.apk
+          CERTIFICATE=$("$ANDROID_HOME/build-tools/36.1.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          test "$CERTIFICATE" = 'e79f033d184b18532551bfa24438a0b0816ffb05f579445842cc2a929a475868' || { echo 'Signing certificate does not match existing releases.'; exit 1; }
           APK_VERSION=$("$ANDROID_HOME/build-tools/36.1.0/aapt" dump badging app/build/outputs/apk/release/app-release.apk | sed -n "s/.*versionName='\([^']*\)'.*/\1/p" | head -1)
           test "$RELEASE_TAG" = "v$APK_VERSION" || { echo 'Tag does not match APK version.'; exit 1; }
           cp app/build/outputs/apk/release/app-release.apk OneTapDND.apk

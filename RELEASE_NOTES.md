@@ -1,25 +1,14 @@
-Download **OneTapDND.apk** below and open it on your Android phone to install.
+Download **OneTapDND.apk** and install it over your existing app.
 
-- Quiet places with silent ringer modes now mute and zero the ring, notification, and system audio streams so calls and priority alerts stay silent, and restore them properly upon leaving.
-- Full DND mode (DND + Silent + Media 0) reliably enforces silent ringer and media-zero without corrupting saved volume settings in the background.
-- Address and place search accepts spaces normally, supports coordinate and Maps-link input, and retries simpler query forms when needed.
-- Quiet Places links directly to the Android access required for DND and silent ringer changes.
-- Launcher alias repair waits until the app leaves the foreground, avoiding package restarts during app startup on affected devices.
-- Media-zero enforcement stops safely if Android rejects foreground-service startup or its settings observer.
+- Choose silent, vibrate, or sound for each quiet place using the new three-position selector.
+- Turn off **Change ringer mode** to keep the phone's current ringer setting. Sound and vibration follow your DND exceptions.
+- **Keep media muted** is now a separate switch.
+- Ringer changes use the requested Android mode directly, check the result, and report rejected changes in the app and monitoring notification.
+- Leaving or pausing restores the previous ringer mode when it still matches the app's applied setting. Manual changes are preserved on exit.
+- Overlapping places combine the quietest ringer choice with any active media-mute request.
+- Existing saved places retain their settings.
+- Release builds require the release signing configuration and no longer fall back to a debug key.
 
-**Upgrading from v1.1 through v1.4.3:** install this APK over the existing app. It uses the same signing key and keeps your settings.
+This replaces the withdrawn v1.4.3 release. Its internal version code is 11, so it can update the withdrawn v1.4.3 and v1.4.4 builds as well as earlier releases from v1.1 onward. The APK uses the existing release signing key and retains saved places and settings.
 
-**Upgrading from v1.0:** uninstall v1.0 first because its signing key differs, then grant DND access and add the tile again.
-
-- Choose DND only, DND plus silent ringer, or DND plus silent ringer with media held at zero for each saved place. Alarms and call audio are left alone.
-- Overlapping places use the strongest selected mode. Leaving or pausing restores the app-owned ringer and media settings to their saved values when they have not been replaced by a newer change.
-- Pause all quiet-place monitoring for one hour, three hours, or a custom duration. The ongoing silent notification provides all three actions.
-- The Quick Settings tile pauses monitoring for one hour when used inside a saved place and resumes immediately when monitoring is paused. Away from a place, it remains a manual DND toggle.
-- The main screen now keeps setup details collapsed. Saved-place rows and the full-screen place editor use shorter labels and put manual coordinates, screenshot reading, and map preview under Advanced location.
-- Search, OCR, and pasted multiline addresses fill coordinates without overwriting labels such as Home or Work.
-- The launcher icons now use centered adaptive artwork, full-mask inverse backgrounds, monochrome layers on Android 13+, and circular legacy fallbacks without a white outer plate.
-- Icon selection uses two aligned rows and applies the chosen launcher alias after leaving the app.
-- Android 13+ can show quiet-place status and pause controls through notification permission. Monitoring continues if notification permission is denied.
-- Distance checks now reschedule themselves from the nearest-place travel time: 1 km maps to 5 minutes, 12 km to 1 hour, and delays stop growing at 24 hours. Geofences remain active so the app does not poll continuously.
-
-Always preview an extracted location before saving it. Quiet places require Google Play services, precise location, and background location access. Android can take a few minutes to detect an arrival or departure. Reopen the app after force-stopping it.
+Validation: 36 unit tests passed, debug and release builds completed, and lint passed with warnings. Phone sound and vibration behavior still needs device validation.

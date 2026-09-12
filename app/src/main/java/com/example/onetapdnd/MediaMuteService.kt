@@ -18,7 +18,7 @@ class MediaMuteService : Service() {
 
     private val watchdog = object : Runnable {
         override fun run() {
-            enforceFullSilence()
+            enforceMediaMute()
             if (runCatching { !audioManager.isVolumeFixed }.getOrDefault(false)) {
                 handler.postDelayed(this, WATCHDOG_INTERVAL_MS)
             }
@@ -26,7 +26,7 @@ class MediaMuteService : Service() {
     }
     private val volumeObserver = object : ContentObserver(handler) {
         override fun onChange(selfChange: Boolean) {
-            enforceFullSilence()
+            enforceMediaMute()
         }
     }
 
@@ -61,7 +61,7 @@ class MediaMuteService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        enforceFullSilence()
+        enforceMediaMute()
         return START_STICKY
     }
 
@@ -74,17 +74,15 @@ class MediaMuteService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun shouldEnforce(): Boolean {
-        return MonitoringCoordinator(this).effectiveAudioMode() ==
-            PlaceAudioMode.DND_SILENT_MEDIA_ZERO
+        return MonitoringCoordinator(this).effectiveAudioMode()?.mutesMedia == true
     }
 
-    private fun enforceFullSilence() {
+    private fun enforceMediaMute() {
         if (!runCatching { shouldEnforce() }.getOrDefault(false)) {
             stopSelf()
             return
         }
         val audioController = PlaceAudioController(this)
-        audioController.enforceRingerSilence()
         audioController.enforceMediaZero()
     }
 

@@ -15,8 +15,8 @@ android {
         applicationId = "com.example.onetapdnd"
         minSdk = 24
         targetSdk = 36
-        versionCode = 10
-        versionName = "1.4.4"
+        versionCode = 11
+        versionName = "1.4.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -39,9 +39,7 @@ android {
             versionNameSuffix = "-debug"
         }
         release {
-            if (!System.getenv("ONETAP_KEYSTORE").isNullOrBlank()) {
-                signingConfig = signingConfigs.getByName("release")
-            }
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -57,6 +55,21 @@ android {
     buildFeatures {
         compose = true
     }
+}
+
+val verifyReleaseSigning by tasks.registering {
+    doLast {
+        val required = listOf(
+            "ONETAP_KEYSTORE", "ONETAP_STORE_PASSWORD", "ONETAP_KEY_ALIAS", "ONETAP_KEY_PASSWORD"
+        )
+        check(required.all { !System.getenv(it).isNullOrBlank() }) {
+            "Release signing is not configured. Use the Android release workflow or configure all ONETAP signing variables."
+        }
+    }
+}
+
+tasks.configureEach {
+    if (name == "preReleaseBuild") dependsOn(verifyReleaseSigning)
 }
 
 dependencies {

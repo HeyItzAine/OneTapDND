@@ -13,7 +13,6 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,7 +25,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -42,7 +40,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -223,10 +220,14 @@ fun QuietPlaces() {
 
             if (!hasDnd) {
                 Text(
-                    "DND access is off. Android will block DND and silent ringer changes until it is enabled.",
+                    "DND access is off. Enable it to apply this place's DND and ringer settings.",
                     color = MaterialTheme.colorScheme.error
                 )
-                Button(onClick = { dndSettings() }) { Text("Allow DND and silent access") }
+                Button(onClick = { dndSettings() }) { Text("Allow DND access") }
+            }
+            remember(revision) { store.audioError() }?.let { message ->
+                Text(message, color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = { coordinator.reconcile() }) { Text("Retry sound settings") }
             }
             if (!precise) {
                 Button(onClick = {
@@ -413,7 +414,9 @@ private fun PlaceEditor(
     var latitude by rememberSaveable { mutableStateOf(existing?.latitude?.toString().orEmpty()) }
     var longitude by rememberSaveable { mutableStateOf(existing?.longitude?.toString().orEmpty()) }
     var radius by rememberSaveable { mutableStateOf(existing?.radiusMeters?.toInt()?.toString() ?: "200") }
-    var modeName by rememberSaveable { mutableStateOf(existing?.audioMode?.name ?: PlaceAudioMode.DND_ONLY.name) }
+    var changeRinger by rememberSaveable { mutableStateOf(existing?.audioMode?.ringer != null || existing == null) }
+    var ringerName by rememberSaveable { mutableStateOf((existing?.audioMode?.ringer ?: RingerMode.SILENT).name) }
+    var muteMedia by rememberSaveable { mutableStateOf(existing?.audioMode?.mutesMedia ?: false) }
     var advanced by rememberSaveable { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -422,7 +425,8 @@ private fun PlaceEditor(
     var lastResolvedQuery by rememberSaveable { mutableStateOf("") }
     var mapPickerCenter by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var mapPickerZoom by remember { mutableDoubleStateOf(18.0) }
-    val audioMode = PlaceAudioMode.valueOf(modeName)
+    val ringerMode = RingerMode.valueOf(ringerName)
+    val audioMode = PlaceAudioMode.fromSettings(ringerMode.takeIf { changeRinger }, muteMedia)
 
     fun select(place: SearchPlace) {
         latitude = place.latitude.toString()
@@ -692,13 +696,36 @@ private fun PlaceEditor(
                     }
 
                     EditorSection("On arrival") {
-                        PlaceAudioMode.entries.forEach { mode ->
-                            AudioModeRow(
-                                mode = mode,
-                                selected = mode == audioMode,
-                                onClick = { modeName = mode.name }
+                        Text("Do Not Disturb turns on using your priority exceptions.", style = MaterialTheme.typography.bodySmall)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Change ringer mode", Modifier.weight(1f))
+                            Switch(
+                                checked = changeRinger, onCheckedChange = { changeRinger = it },
+                                modifier = Modifier.semantics { contentDescription = "Change ringer mode" }
                             )
                         }
+                        if (changeRinger) {
+                            RingerModeSelector(ringerMode) { ringerName = it.name }
+                            Text(
+                                when (ringerMode) {
+                                    RingerMode.SILENT -> "Calls and notifications are silent, with no vibration."
+                                    RingerMode.VIBRATE -> "Calls and notifications vibrate when allowed by DND."
+                                    RingerMode.SOUND -> "Calls and notifications use sound when allowed by DND."
+                                },
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Keep media muted", Modifier.weight(1f))
+                            Switch(
+                                checked = muteMedia, onCheckedChange = { muteMedia = it },
+                                modifier = Modifier.semantics { contentDescription = "Keep media muted" }
+                            )
+                        }
+                        Text(
+                            "On exit, restores the previous settings unless you changed them. In overlapping places, silent takes priority over vibrate, then sound.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
 
                     OutlinedCard(
@@ -791,32 +818,6 @@ private fun EditorSection(title: String, content: @Composable () -> Unit) {
     }
 }
 
-@Composable
-private fun AudioModeRow(mode: PlaceAudioMode, selected: Boolean, onClick: () -> Unit) {
-    OutlinedCard(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        border = BorderStroke(
-            if (selected) 2.dp else 1.dp,
-            if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-        ),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.outlinedCardColors(
-            containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer
-            else MaterialTheme.colorScheme.surface
-        )
-    ) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            RadioButton(selected = selected, onClick = onClick)
-            Column(Modifier.weight(1f)) {
-                Text(audioModeLabel(mode), fontWeight = FontWeight.Medium)
-                if (selected) {
-                    Text(audioModeDescription(mode), style = MaterialTheme.typography.bodySmall)
-                }
-            }
-        }
-    }
-}
-
 private fun openMapPicker(
     query: String,
     latitude: String,
@@ -853,17 +854,11 @@ private fun openMapPicker(
     }
 }
 
-private fun audioModeLabel(mode: PlaceAudioMode): String = when (mode) {
-    PlaceAudioMode.DND_ONLY -> "DND only"
-    PlaceAudioMode.DND_AND_SILENT -> "DND + Silent"
-    PlaceAudioMode.DND_SILENT_MEDIA_ZERO -> "DND + Silent + Media 0"
-}
-
-private fun audioModeDescription(mode: PlaceAudioMode): String = when (mode) {
-    PlaceAudioMode.DND_ONLY -> "Uses priority DND. Ringer and media volume stay unchanged."
-    PlaceAudioMode.DND_AND_SILENT -> "Adds silent ringer. Media and alarm volume stay unchanged."
-    PlaceAudioMode.DND_SILENT_MEDIA_ZERO -> "Adds silent ringer and holds media volume at zero."
-}
+private fun audioModeLabel(mode: PlaceAudioMode): String = buildList {
+    add("DND")
+    mode.ringer?.let { add(it.label) }
+    if (mode.mutesMedia) add("Media muted")
+}.joinToString(" + ")
 
 private fun formatDuration(minutes: Int): String = when {
     minutes < 60 -> "$minutes min"

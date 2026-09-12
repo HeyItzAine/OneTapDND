@@ -18,7 +18,7 @@ The tile controls this app's rules. DND enabled by another Android mode can rema
 
 Choose **Add place**, search an address, read one from a screenshot, use your current location, or enter coordinates copied from a Google Maps pin. The screenshot reader recognizes addresses, place names, plus codes, and common coordinate formats, then fills the form and looks up the pin. Check the extracted text and preview the position before saving. Set a radius from **100 to 10,000 meters**; 200 meters is a practical starting point.
 
-Each place has one of three modes: **DND only**, **DND + silent**, or **DND + silent + media at zero**. The strongest mode wins when places overlap. The third mode holds media volume at zero while you remain inside; alarms and call audio are not changed. Leaving every active place restores the ringer mode and media volume that were present before place automation changed them. A newer manual change is preserved when restoration can identify it.
+Each place enables priority DND and can set the ringer to **silent**, **vibrate**, or **sound** using a three-position selector. Turn off **Change ringer mode** to leave the ringer unchanged. Sound and vibration still follow your DND exceptions. **Keep media muted** independently holds media volume at zero while you remain inside; alarms and call audio are not changed. When places overlap, silent takes priority over vibrate, then sound, and any active media-mute request remains in effect. Leaving every active place restores the previous ringer mode and media volume when they still match the settings applied by the app. Rejected ringer changes appear in the app and monitoring notification, with a retry action in the app. Existing saved place settings are preserved.
 
 Quiet-place monitoring can be paused for one hour, three hours, or a custom duration from 15 minutes to 24 hours. The silent status notification provides all three pause actions. While paused, geofences and place-owned audio changes are released; monitoring resumes after the deadline. In Quick Settings, tapping while inside a saved place pauses monitoring for one hour, and tapping while paused resumes it immediately. Away from saved places, the tile continues to control manual DND.
 
@@ -33,7 +33,7 @@ Places can be edited, disabled, or deleted. Search, screenshot recognition, past
 - **DND access:** controls the app's DND rules. The tile works without location permission.
 - **Precise and background location:** detect arrivals and departures for quiet places, including when the app is closed.
 - **Notifications:** shows quiet-place status and pause controls. Denying it does not disable monitoring.
-- **Audio settings:** applies silent mode and media-zero modes selected for saved places.
+- **Audio settings:** applies the sound, vibrate, silent, and media-mute choices saved for each place.
 - **Foreground service:** enforces media volume zero only while that place mode is active.
 - **Internet:** supports address lookup and the location services dependency.
 - **Boot completed:** restores place monitoring after restarting the phone.

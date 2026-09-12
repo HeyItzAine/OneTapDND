@@ -148,11 +148,11 @@ class PlaceStateTest {
     }
 
     @Test
-    fun ringerModeRestorationHandlesDirectAndDegradedSilence() {
+    fun ringerModeRestorationPreservesManualVibrateChoice() {
         // Direct restoration from silent to normal
         assertTrue(shouldRestoreRingerMode(original = 2, applied = 0, current = 0))
-        // Degraded to vibrate on devices that don't support raw silent without vibrate
-        assertTrue(shouldRestoreRingerMode(original = 2, applied = 0, current = 1))
+        // A manual vibrate choice must not be mistaken for app-owned silence.
+        assertFalse(shouldRestoreRingerMode(original = 2, applied = 0, current = 1))
         // Direct restoration from silent to vibrate when original was vibrate
         assertTrue(shouldRestoreRingerMode(original = 1, applied = 0, current = 0))
         // User manually turned on ringer (normal) while inside quiet place: do not overwrite
@@ -192,5 +192,29 @@ class PlaceStateTest {
         assertNull(empty.appliedNotificationVolume)
         assertNull(empty.originalSystemVolume)
         assertNull(empty.appliedSystemVolume)
+    }
+
+    @Test
+    fun overlappingPlacesCombineQuietestRingerWithAnyMediaMute() {
+        val silent = first.copy(audioMode = PlaceAudioMode.DND_AND_SILENT)
+        val sound = second.copy(audioMode = PlaceAudioMode.DND_SOUND_MEDIA_ZERO)
+        val vibrate = third.copy(audioMode = PlaceAudioMode.DND_AND_VIBRATE)
+        val state = PlaceState(setOf(first.id, second.id, third.id))
+        assertEquals(PlaceAudioMode.DND_SILENT_MEDIA_ZERO, state.strongestMode(listOf(silent, sound, vibrate)))
+        assertEquals(PlaceAudioMode.DND_VIBRATE_MEDIA_ZERO, state.strongestMode(listOf(sound, vibrate)))
+        assertEquals(PlaceAudioMode.DND_SOUND_MEDIA_ZERO, state.strongestMode(listOf(sound)))
+        assertEquals(PlaceAudioMode.DND_AND_VIBRATE, state.strongestMode(listOf(vibrate)))
+    }
+
+    @Test
+    fun everyRingerAndMediaCombinationSurvivesStorage() {
+        (listOf<RingerMode?>(null) + RingerMode.entries).forEach { ringer ->
+            listOf(false, true).forEach { media ->
+                val mode = PlaceAudioMode.fromSettings(ringer, media)
+                assertEquals(mode, PlaceAudioMode.fromStored(mode.name, false))
+                assertEquals(ringer, mode.ringer)
+                assertEquals(media, mode.mutesMedia)
+            }
+        }
     }
 }

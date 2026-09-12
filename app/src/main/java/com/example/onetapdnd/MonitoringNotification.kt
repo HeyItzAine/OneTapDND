@@ -57,7 +57,7 @@ object MonitoringNotification {
         val text = if (paused) {
             "Resumes ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(pausedUntil))}"
         } else {
-            store.adaptiveCheckStatus().takeIf { it.isNotBlank() } ?: store.status()
+            store.audioError() ?: store.adaptiveCheckStatus().takeIf { it.isNotBlank() } ?: store.status()
         }
         return addPauseActions(baseBuilder(context), context)
             .setContentTitle(title)

@@ -56,7 +56,7 @@ class MonitoringCoordinator(context: Context) {
         }
         val mode = requestedMode.takeIf { dndReady }
         PlaceAudioController(context).reconcile(mode)
-        if (mode == PlaceAudioMode.DND_SILENT_MEDIA_ZERO) {
+        if (mode?.mutesMedia == true) {
             runCatching { MediaMuteService.start(context) }.onFailure {
                 store.status("Media mute could not stay active. Open the app to retry.")
             }

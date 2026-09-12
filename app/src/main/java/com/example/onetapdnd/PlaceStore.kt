@@ -128,6 +128,12 @@ class PlaceStore(context: Context) {
 
     fun status(): String = preferences.getString(KEY_STATUS, "Add a place to get started.")!!
 
+    fun audioError(message: String?) {
+        preferences.edit().putString("audioError", message).apply()
+    }
+
+    fun audioError(): String? = preferences.getString("audioError", null)
+
     fun adaptiveCheckStatus(): String = preferences.getString(KEY_ADAPTIVE_STATUS, "")!!
 
     fun saveAdaptiveCheckStatus(message: String, nextCheckEpochMs: Long) {

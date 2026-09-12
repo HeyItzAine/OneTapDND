@@ -1,17 +1,25 @@
 package com.example.onetapdnd
 
-enum class PlaceAudioMode(val strength: Int) {
-    DND_ONLY(0),
-    DND_AND_SILENT(1),
-    DND_SILENT_MEDIA_ZERO(2);
+enum class RingerMode(val platformValue: Int, val quietness: Int, val label: String) {
+    SILENT(0, 3, "Silent"),
+    VIBRATE(1, 2, "Vibrate"),
+    SOUND(2, 1, "Sound")
+}
 
-    val silencesRinger: Boolean
-        get() = this != DND_ONLY
-
-    val mutesMedia: Boolean
-        get() = this == DND_SILENT_MEDIA_ZERO
+enum class PlaceAudioMode(val ringer: RingerMode?, val mutesMedia: Boolean = false) {
+    DND_ONLY(null),
+    DND_AND_SILENT(RingerMode.SILENT),
+    DND_SILENT_MEDIA_ZERO(RingerMode.SILENT, true),
+    DND_AND_VIBRATE(RingerMode.VIBRATE),
+    DND_AND_SOUND(RingerMode.SOUND),
+    DND_VIBRATE_MEDIA_ZERO(RingerMode.VIBRATE, true),
+    DND_SOUND_MEDIA_ZERO(RingerMode.SOUND, true),
+    DND_MEDIA_ZERO(null, true);
 
     companion object {
+        fun fromSettings(ringer: RingerMode?, mutesMedia: Boolean): PlaceAudioMode =
+            entries.first { it.ringer == ringer && it.mutesMedia == mutesMedia }
+
         fun fromStored(value: String?, legacySilence: Boolean): PlaceAudioMode =
             entries.firstOrNull { it.name == value }
                 ?: if (legacySilence) DND_AND_SILENT else DND_ONLY
@@ -43,8 +51,14 @@ data class PlaceState(val inside: Set<String>) {
     fun active(rules: List<PlaceRule>): List<PlaceRule> =
         rules.filter { it.enabled && it.id in inside }
 
-    fun strongestMode(rules: List<PlaceRule>): PlaceAudioMode? =
-        active(rules).maxByOrNull { it.audioMode.strength }?.audioMode
+    fun strongestMode(rules: List<PlaceRule>): PlaceAudioMode? {
+        val modes = active(rules).map { it.audioMode }
+        if (modes.isEmpty()) return null
+        return PlaceAudioMode.fromSettings(
+            modes.mapNotNull { it.ringer }.maxByOrNull { it.quietness },
+            modes.any { it.mutesMedia }
+        )
+    }
 }
 
 data class AudioSnapshot(
