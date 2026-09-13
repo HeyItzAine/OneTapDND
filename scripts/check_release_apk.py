@@ -22,6 +22,10 @@ REQUIRED = {
         "android.content.Context",
         "androidx.work.WorkerParameters",
     ),
+    "com.example.onetapdnd.AudioRestoreWorker": (
+        "android.content.Context",
+        "androidx.work.WorkerParameters",
+    ),
 }
 
 
