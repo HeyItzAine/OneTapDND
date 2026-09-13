@@ -65,6 +65,13 @@ class PlaceStore(context: Context) {
         preferences.edit().putStringSet(KEY_INSIDE, state.inside).commit()
     }
 
+    fun lastLocationObservationNanos(): Long = preferences.getLong("lastLocationObservationNanos", 0L)
+
+    fun saveLocationState(state: PlaceState, observationNanos: Long) {
+        preferences.edit().putStringSet(KEY_INSIDE, state.inside)
+            .putLong("lastLocationObservationNanos", observationNanos).commit()
+    }
+
     fun clearPosition() {
         saveState(state().copy(inside = emptySet()))
     }
@@ -106,6 +113,12 @@ class PlaceStore(context: Context) {
         originalSystemVolume = preferences.optionalInt(KEY_ORIGINAL_SYSTEM_VOL),
         appliedSystemVolume = preferences.optionalInt(KEY_APPLIED_SYSTEM_VOL)
     )
+
+    fun pendingRingerRestore(): Int? = preferences.optionalInt("pendingRingerRestore")
+
+    fun savePendingRingerRestore(mode: Int?) {
+        preferences.edit().putOptionalInt("pendingRingerRestore", mode).commit()
+    }
 
     fun saveAudioSnapshot(snapshot: AudioSnapshot) {
         preferences.edit()

@@ -8,6 +8,8 @@ class PlaceAudioController(context: Context) {
     private val audioManager = context.getSystemService(AudioManager::class.java)
     private val notificationManager = context.getSystemService(NotificationManager::class.java)
     private val store = PlaceStore(context)
+    private var ringerRestoreTarget: Int? = null
+    private var ownsRingerRestore = false
     private val ringer = RingerController(object : RingerAccess {
         override var mode: Int
             get() = audioManager.ringerMode
@@ -16,22 +18,61 @@ class PlaceAudioController(context: Context) {
         override val isVolumeFixed get() = audioManager.isVolumeFixed
     })
 
-    fun reconcile(mode: PlaceAudioMode?) {
+    fun prepare(mode: PlaceAudioMode?) {
+        var snapshot = store.audioSnapshot()
+        val current = audioManager.ringerMode
+        val ownershipMode = if (current == AudioManager.RINGER_MODE_SILENT &&
+            notificationManager.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL
+        ) snapshot.appliedRingerMode ?: current else current
+        if (mode?.ringer != null) {
+            snapshot = snapshot.copy(originalRingerMode = store.pendingRingerRestore()
+                ?: ringerOriginalForApply(snapshot, ownershipMode))
+            store.savePendingRingerRestore(null)
+        } else {
+            ownsRingerRestore = snapshot.originalRingerMode != null && snapshot.appliedRingerMode != null
+            ringerRestoreTarget = store.pendingRingerRestore()
+                ?: if (ownsRingerRestore && ownershipMode != snapshot.appliedRingerMode) current
+                    else snapshot.originalRingerMode
+            if (ownsRingerRestore) store.savePendingRingerRestore(ringerRestoreTarget)
+        }
+        snapshot = restoreLegacyVolumes(snapshot)
+        snapshot = if (mode?.mutesMedia == true && !audioManager.isVolumeFixed) {
+            snapshot.copy(originalMediaVolume = snapshot.originalMediaVolume
+                ?: audioManager.getStreamVolume(AudioManager.STREAM_MUSIC))
+        } else {
+            restoreMedia(snapshot)
+        }
+        store.saveAudioSnapshot(snapshot)
+    }
+
+    fun apply(mode: PlaceAudioMode?, restoreRinger: Boolean = true): Boolean {
+        val ringerBefore = audioManager.ringerMode
+        var snapshot = store.audioSnapshot()
+        if (mode?.ringer != null) {
+            val applied = ringer.apply(snapshot, mode.ringer, snapshot.originalRingerMode)
+            snapshot = applied.snapshot
+            store.audioError(applied.error)
+        } else if (restoreRinger) {
+            // DND can mask the underlying ringer. Decide ownership before releasing
+            // the rule, then restore against the unmasked value afterward.
+            val restored = ringer.restore(snapshot.copy(
+                originalRingerMode = ringerRestoreTarget ?: snapshot.originalRingerMode,
+                appliedRingerMode = if (ownsRingerRestore) audioManager.ringerMode else snapshot.appliedRingerMode
+            ))
+            snapshot = restored.snapshot
+            store.audioError(restored.error)
+            if (snapshot.originalRingerMode == null) store.savePendingRingerRestore(null)
+        }
+        if (mode?.mutesMedia == true && !audioManager.isVolumeFixed) snapshot = applyMediaZero(snapshot)
+        store.saveAudioSnapshot(snapshot)
+        return audioManager.ringerMode != ringerBefore
+    }
+
+    fun recordAppliedRinger() {
         val snapshot = store.audioSnapshot()
-        val update = if (mode?.ringer != null) {
-            ringer.apply(snapshot, mode.ringer)
-        } else {
-            ringer.restore(snapshot)
+        if (snapshot.appliedRingerMode != null) {
+            store.saveAudioSnapshot(snapshot.copy(appliedRingerMode = audioManager.ringerMode))
         }
-        store.saveAudioSnapshot(update.snapshot)
-        store.audioError(update.error)
-        var next = restoreLegacyVolumes(update.snapshot)
-        next = if (mode?.mutesMedia == true && !audioManager.isVolumeFixed) {
-            applyMediaZero(next)
-        } else {
-            restoreMedia(next)
-        }
-        store.saveAudioSnapshot(next)
     }
 
     fun enforceMediaZero() {

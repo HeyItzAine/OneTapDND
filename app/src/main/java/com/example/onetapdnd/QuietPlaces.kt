@@ -98,6 +98,7 @@ fun QuietPlaces() {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val store = remember { PlaceStore(context) }
     val coordinator = remember { MonitoringCoordinator(context) }
+    val scope = rememberCoroutineScope()
     var revision by remember { mutableIntStateOf(0) }
     var editorOpen by rememberSaveable { mutableStateOf(false) }
     var editingId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -105,6 +106,7 @@ fun QuietPlaces() {
     var feedback by remember { mutableStateOf<String?>(null) }
     var currentLocation by remember { mutableStateOf<Location?>(null) }
     var infoExpanded by rememberSaveable { mutableStateOf(false) }
+    var checkingLocation by remember { mutableStateOf(false) }
 
     DisposableEffect(lifecycle) {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> revision++ }
@@ -130,6 +132,24 @@ fun QuietPlaces() {
     val paused = pausedUntil > System.currentTimeMillis()
     var customPauseMinutes by remember(revision) { mutableIntStateOf(store.customPauseMinutes()) }
 
+    suspend fun refreshLocation(showFeedback: Boolean) {
+        if (checkingLocation) return
+        checkingLocation = true
+        try {
+            val latest = currentDeviceLocation(context)
+            if (latest != null) currentLocation = latest
+            val applied = latest != null && coordinator.onLocation(latest)
+            if (showFeedback) feedback = if (applied) null
+                else "Could not check the boundary. Check location access and try again with a clear GPS signal."
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            if (showFeedback) feedback = "Could not check the place settings. Check DND and location access, then retry."
+        } finally {
+            checkingLocation = false
+        }
+    }
+
     LaunchedEffect(precise, lifecycle) {
         if (!precise) {
             currentLocation = null
@@ -137,14 +157,7 @@ fun QuietPlaces() {
         }
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             while (true) {
-                val latest = try {
-                    currentDeviceLocation(context)
-                } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    null
-                }
-                currentLocation = latest ?: currentLocation
+                refreshLocation(showFeedback = false)
                 delay(30_000)
             }
         }
@@ -249,6 +262,23 @@ fun QuietPlaces() {
             }
             feedback?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
+            if (rules.any { it.enabled } && !paused) {
+                OutlinedButton(
+                    enabled = precise && background && hasDnd && !checkingLocation,
+                    onClick = { scope.launch { refreshLocation(showFeedback = true) } }
+                ) { Text(if (checkingLocation) "Checking location…" else "Check location now") }
+            }
+            if (remember(revision) { DndController(context).isManualDndRequested() }) {
+                Text(
+                    "Manual DND is enabled separately. Leaving a quiet place only ends its automatic DND.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                TextButton(enabled = hasDnd, onClick = {
+                    DndController(context).setManualEnabled(false)
+                    coordinator.reconcile()
+                }) { Text("Turn off manual DND") }
+            }
+
             if (paused) {
                 Button(onClick = { coordinator.resumeNow(); revision++ }) { Text("Resume now") }
             }
@@ -282,6 +312,13 @@ fun QuietPlaces() {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(store.status(), style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "After the last place ends, its DND turns off and audio settings restore automatically. Other Android DND modes can remain on. For a boundary check, move beyond the radius plus the location accuracy margin (at least 25 m), then tap Check location now. Background exit detection can take a few minutes.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                currentLocation?.takeIf { it.hasAccuracy() }?.let {
+                    Text("Location accuracy: ±${it.accuracy.roundToInt()} m.", style = MaterialTheme.typography.bodySmall)
+                }
                 store.adaptiveCheckStatus().takeIf { it.isNotBlank() }?.let { status ->
                     Text(status, style = MaterialTheme.typography.bodySmall)
                 }

@@ -109,10 +109,11 @@ class AdaptiveLocationWorker(context: Context, parameters: WorkerParameters) :
         }
 
         val location = currentLocation(context)
-        if (location == null) {
-            val delay = AdaptiveLocationChecks.LOCATION_RETRY_DELAY_MS
+        if (location == null || !MonitoringCoordinator(context).onLocation(location)) {
+            val delay = if (store.state().active(store.rules()).isNotEmpty()) AdaptiveLocationChecks.MIN_DELAY_MS
+                else AdaptiveLocationChecks.LOCATION_RETRY_DELAY_MS
             store.saveAdaptiveCheckStatus(
-                "Location unavailable. Next distance check in 1 hour.",
+                "Fresh location unavailable. Next distance check in ${formatDelay(delay)}.",
                 System.currentTimeMillis() + delay
             )
             MonitoringNotification.update(context)
@@ -120,24 +121,14 @@ class AdaptiveLocationWorker(context: Context, parameters: WorkerParameters) :
             return Result.success()
         }
 
-        val previous = store.state()
-        val distances = rules.associateWith { rule -> distanceTo(location, rule) }
-        val accuracyBuffer = max(location.accuracy.takeIf { location.hasAccuracy() } ?: 0f, 25f)
-        val inside = distances.filter { (rule, distance) ->
-            if (rule.id in previous.inside) {
-                distance <= rule.radiusMeters + accuracyBuffer
-            } else {
-                distance <= (rule.radiusMeters - accuracyBuffer).coerceAtLeast(0f)
-            }
-        }.keys.mapTo(mutableSetOf()) { it.id }
-        if (inside != previous.inside) store.saveState(PlaceState(inside))
-        MonitoringCoordinator(context).reconcile()
-
-        val nearestDistance = distances.values.minOrNull() ?: 0f
+        val distances = store.rules().filter { it.enabled }.associateWith { rule -> distanceTo(location, rule) }
+        val nearestDistance = distances.minOfOrNull { (rule, distance) ->
+            distanceToPlaceBoundary(distance, rule.radiusMeters, location.accuracy)
+        } ?: 0f
         val speed = location.speed.takeIf { location.hasSpeed() }
         val delay = AdaptiveLocationChecks.delayForDistance(nearestDistance, speed)
         store.saveAdaptiveCheckStatus(
-            "Nearest place ${formatDistance(nearestDistance)} away. Next distance check in ${formatDelay(delay)}.",
+            "Nearest place boundary ${formatDistance(nearestDistance)} away. Next distance check in ${formatDelay(delay)}.",
             System.currentTimeMillis() + delay
         )
         MonitoringNotification.update(context)
@@ -150,7 +141,8 @@ class AdaptiveLocationWorker(context: Context, parameters: WorkerParameters) :
         val token = CancellationTokenSource()
         return try {
             val request = CurrentLocationRequest.Builder()
-                .setPriority(Priority.PRIORITY_BALANCED_POWER_ACCURACY)
+                .setPriority(if (PlaceStore(context).state().inside.isNotEmpty()) Priority.PRIORITY_HIGH_ACCURACY
+                    else Priority.PRIORITY_BALANCED_POWER_ACCURACY)
                 .setMaxUpdateAgeMillis(2L * 60L * 1_000L)
                 .setDurationMillis(20_000L)
                 .build()

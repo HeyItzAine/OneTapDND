@@ -9,7 +9,7 @@ internal interface RingerAccess {
 internal data class RingerUpdate(val snapshot: AudioSnapshot, val error: String? = null)
 
 internal class RingerController(private val access: RingerAccess) {
-    fun apply(snapshot: AudioSnapshot, target: RingerMode): RingerUpdate {
+    fun apply(snapshot: AudioSnapshot, target: RingerMode, originalBeforeDnd: Int? = null): RingerUpdate {
         val current = access.mode
         if (current != target.platformValue && !access.hasPolicyAccess) {
             return RingerUpdate(snapshot, "Allow DND access to change the ringer mode.")
@@ -17,7 +17,7 @@ internal class RingerController(private val access: RingerAccess) {
         if (current != target.platformValue && access.isVolumeFixed) {
             return RingerUpdate(snapshot, "This device does not allow ringer mode changes.")
         }
-        val original = ringerOriginalForApply(snapshot, current)
+        val original = originalBeforeDnd ?: ringerOriginalForApply(snapshot, current)
         return try {
             if (current != target.platformValue) access.mode = target.platformValue
             val actual = access.mode

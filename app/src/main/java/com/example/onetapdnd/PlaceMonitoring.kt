@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.os.Build
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 import androidx.work.ExistingWorkPolicy
@@ -140,8 +141,13 @@ class GeofenceReceiver : BroadcastReceiver() {
             PlaceMonitoring.schedule(context)
             return
         }
-        store.saveState(store.state().transition(ids, event.geofenceTransition == Geofence.GEOFENCE_TRANSITION_ENTER))
-        runCatching { MonitoringCoordinator(context).reconcile() }.onFailure {
+        runCatching {
+            MonitoringCoordinator(context).onGeofenceTransition(
+                ids,
+                event.geofenceTransition == Geofence.GEOFENCE_TRANSITION_ENTER,
+                event.triggeringLocation?.elapsedRealtimeNanos ?: SystemClock.elapsedRealtimeNanos()
+            )
+        }.onFailure {
             store.status("Could not change DND. Check DND access, then retry.")
             MonitoringNotification.update(context)
         }

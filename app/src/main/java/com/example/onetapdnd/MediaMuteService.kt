@@ -32,6 +32,7 @@ class MediaMuteService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         audioManager = getSystemService(AudioManager::class.java)
         val foregroundStarted = runCatching {
             startForeground(
@@ -57,6 +58,7 @@ class MediaMuteService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startForeground(MonitoringNotification.MEDIA_SERVICE_ID, MonitoringNotification.buildMediaService(this))
         if (!runCatching { shouldEnforce() }.getOrDefault(false)) {
             stopSelf()
             return START_NOT_STICKY
@@ -66,6 +68,7 @@ class MediaMuteService : Service() {
     }
 
     override fun onDestroy() {
+        if (instance === this) instance = null
         handler.removeCallbacks(watchdog)
         if (observerRegistered) runCatching { contentResolver.unregisterContentObserver(volumeObserver) }
         super.onDestroy()
@@ -88,6 +91,8 @@ class MediaMuteService : Service() {
 
     companion object {
         private const val WATCHDOG_INTERVAL_MS = 1_000L
+        private var instance: MediaMuteService? = null
+        private val mainHandler = Handler(Looper.getMainLooper())
 
         fun start(context: Context) {
             ContextCompat.startForegroundService(
@@ -97,9 +102,8 @@ class MediaMuteService : Service() {
         }
 
         fun stop(context: Context) {
-            context.applicationContext.stopService(
-                Intent(context.applicationContext, MediaMuteService::class.java)
-            )
+            // Let a pending foreground start complete before the service stops itself.
+            mainHandler.post { instance?.stopSelf() }
         }
     }
 }

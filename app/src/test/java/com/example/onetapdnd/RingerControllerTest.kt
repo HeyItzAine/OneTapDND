@@ -51,6 +51,17 @@ class RingerControllerTest {
     }
 
     @Test
+    fun dndSideEffectCannotReplaceTheOriginalVibrateSetting() {
+        val access = FakeRinger(0)
+        val controller = RingerController(access)
+        val captured = AudioSnapshot(originalRingerMode = 1)
+        val applied = controller.apply(captured, RingerMode.SILENT, originalBeforeDnd = 1)
+        assertEquals(1, applied.snapshot.originalRingerMode)
+        controller.restore(applied.snapshot)
+        assertEquals(1, access.mode)
+    }
+
+    @Test
     fun manualChangeIsPreservedOnExit() {
         val access = FakeRinger(2)
         val controller = RingerController(access)

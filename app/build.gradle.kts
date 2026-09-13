@@ -15,8 +15,8 @@ android {
         applicationId = "com.example.onetapdnd"
         minSdk = 24
         targetSdk = 36
-        versionCode = 11
-        versionName = "1.4.3"
+        versionCode = 12
+        versionName = "1.4.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
