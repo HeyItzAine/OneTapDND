@@ -1,15 +1,14 @@
 Download **OneTapDND.apk** and install it over your existing app. No uninstall is needed for installations signed with the existing release key. Saved places and settings are retained.
 
-- Capture the original ringer mode before DND changes it, and restore it after Android finishes the DND transition.
-- Save pending ringer restoration and retry failed restores.
-- Update active places when a fresh foreground location confirms entry or exit. Add **Check location now** for testing.
-- Schedule backup checks from the place boundary, not its centre, and retry unavailable location sooner while inside a place.
-- Reject stale location updates that could reactivate a place after a newer exit.
-- Release duplicate place DND rules on exit and fix rapid media-mute service start/stop handling.
-- Explain when manual DND is enabled separately and provide a button to turn it off.
+- Fix Silent when DND reports a silent ringer but the phone's internal mode is still Sound or Vibrate. Apply an explicit ringer transition when Silent is selected.
+- Remember the requested mode so repeated location checks do not toggle the ringer again.
+- Preserve place DND through the ringer transition and restore the starting ringer mode on exit.
+- Shrink the Sound / Vibrate / Silent selector to a 216 x 64 dp pill with 48 dp selection circles. Each choice keeps a 72 x 64 dp touch target.
 
 To test: start in Sound, Vibrate, or Silent; enter a quiet place; then move beyond its radius plus the reported location uncertainty (at least 25 m). Use **Check location now** to check the boundary directly. Background geofence detection can take a few minutes. Leaving the last place ends its DND; separately enabled manual DND remains on.
 
-Validation: 42 unit tests and 15 Android emulator tests passed, including all nine original/selected ringer-mode combinations, repeated checks, location exits, pause, disabled places, media restoration, and manual choices. Debug lint passed with warnings. Physical-device walking tests are still needed.
+Android limitation: restoring an originally Silent ringer can also enable system DND. The place rule is released, but system DND can remain on. Restoring Sound or Vibrate turns it off unless another DND rule is active.
 
-Version 1.4.4 uses internal version code 12, higher than both the current 1.4.3 release and the withdrawn older builds. The release workflow verifies the APK against the existing signing certificate before publishing.
+Validation: 44 unit tests passed. A physical-phone test checked the internal Silent state, repeated checks, mode switching, and ringer restoration on simulated place exit. Three UI tests passed on the same phone, including selector dimensions and all three choices. Debug lint passed with warnings. Physical walking tests are still needed to check location detection.
+
+Version 1.4.5 uses internal version code 13. The release workflow verifies the APK against the existing signing certificate before publishing.

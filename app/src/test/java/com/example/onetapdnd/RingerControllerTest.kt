@@ -30,7 +30,11 @@ class RingerControllerTest {
                 assertNull(applied.error)
                 assertEquals(target.platformValue, access.mode)
                 assertEquals(original.platformValue, applied.snapshot.originalRingerMode)
-                assertEquals(if (original == target) emptyList<Int>() else listOf(target.platformValue), access.writes)
+                assertEquals(when {
+                    target == RingerMode.SILENT -> listOf(2, 0)
+                    original == target -> emptyList<Int>()
+                    else -> listOf(target.platformValue)
+                }, access.writes)
                 val restored = controller.restore(applied.snapshot)
                 assertNull(restored.error)
                 assertEquals(original.platformValue, access.mode)
@@ -77,7 +81,7 @@ class RingerControllerTest {
         val result = RingerController(access).apply(AudioSnapshot(), RingerMode.SILENT)
         assertNotNull(result.error)
         assertEquals(AudioSnapshot(), result.snapshot)
-        assertEquals(listOf(0), access.writes)
+        assertEquals(listOf(2, 0), access.writes)
     }
 
     @Test
@@ -114,5 +118,24 @@ class RingerControllerTest {
         val retried = controller.restore(failed.snapshot)
         assertNull(retried.error)
         assertEquals(2, access.mode)
+    }
+
+    @Test fun silentReadWithoutAnAppliedSilentRequestStillWritesTheRinger() {
+        val access = FakeRinger(0)
+        val result = RingerController(access).apply(AudioSnapshot(originalRingerMode = 2), RingerMode.SILENT)
+        assertEquals(listOf(2, 0), access.writes)
+        assertEquals(0, result.snapshot.requestedRingerMode)
+        assertEquals(2, result.snapshot.originalRingerMode)
+        access.writes.clear()
+        RingerController(access).apply(result.snapshot, RingerMode.SILENT)
+        assertTrue("repeated checks do not pulse the ringer", access.writes.isEmpty())
+    }
+
+    @Test fun switchingFromDndMaskedSoundToSilentIsNotSkipped() {
+        val access = FakeRinger(0)
+        val snapshot = AudioSnapshot(originalRingerMode = 1, appliedRingerMode = 0, requestedRingerMode = 2)
+        val result = RingerController(access).apply(snapshot, RingerMode.SILENT)
+        assertEquals(listOf(2, 0), access.writes)
+        assertEquals(1, result.snapshot.originalRingerMode)
     }
 }

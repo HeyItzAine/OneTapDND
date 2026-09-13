@@ -10,10 +10,14 @@ class PlaceAudioController(context: Context) {
     private val store = PlaceStore(context)
     private var ringerRestoreTarget: Int? = null
     private var ownsRingerRestore = false
+    private var ringerWritten = false
     private val ringer = RingerController(object : RingerAccess {
         override var mode: Int
             get() = audioManager.ringerMode
-            set(value) { audioManager.ringerMode = value }
+            set(value) {
+                audioManager.ringerMode = value
+                ringerWritten = true
+            }
         override val hasPolicyAccess get() = notificationManager.isNotificationPolicyAccessGranted
         override val isVolumeFixed get() = audioManager.isVolumeFixed
     })
@@ -46,7 +50,7 @@ class PlaceAudioController(context: Context) {
     }
 
     fun apply(mode: PlaceAudioMode?, restoreRinger: Boolean = true): Boolean {
-        val ringerBefore = audioManager.ringerMode
+        ringerWritten = false
         var snapshot = store.audioSnapshot()
         if (mode?.ringer != null) {
             val applied = ringer.apply(snapshot, mode.ringer, snapshot.originalRingerMode)
@@ -65,7 +69,7 @@ class PlaceAudioController(context: Context) {
         }
         if (mode?.mutesMedia == true && !audioManager.isVolumeFixed) snapshot = applyMediaZero(snapshot)
         store.saveAudioSnapshot(snapshot)
-        return audioManager.ringerMode != ringerBefore
+        return ringerWritten
     }
 
     fun recordAppliedRinger() {

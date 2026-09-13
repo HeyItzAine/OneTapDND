@@ -64,6 +64,7 @@ data class PlaceState(val inside: Set<String>) {
 data class AudioSnapshot(
     val originalRingerMode: Int? = null,
     val appliedRingerMode: Int? = null,
+    val requestedRingerMode: Int? = null,
     val originalMediaVolume: Int? = null,
     val appliedMediaVolume: Int? = null,
     val originalRingVolume: Int? = null,

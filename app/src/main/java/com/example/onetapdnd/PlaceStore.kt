@@ -104,6 +104,7 @@ class PlaceStore(context: Context) {
     fun audioSnapshot() = AudioSnapshot(
         originalRingerMode = preferences.optionalInt(KEY_ORIGINAL_RINGER),
         appliedRingerMode = preferences.optionalInt(KEY_APPLIED_RINGER),
+        requestedRingerMode = preferences.optionalInt("audioRequestedRingerMode"),
         originalMediaVolume = preferences.optionalInt(KEY_ORIGINAL_MEDIA),
         appliedMediaVolume = preferences.optionalInt(KEY_APPLIED_MEDIA),
         originalRingVolume = preferences.optionalInt(KEY_ORIGINAL_RING_VOL),
@@ -124,6 +125,7 @@ class PlaceStore(context: Context) {
         preferences.edit()
             .putOptionalInt(KEY_ORIGINAL_RINGER, snapshot.originalRingerMode)
             .putOptionalInt(KEY_APPLIED_RINGER, snapshot.appliedRingerMode)
+            .putOptionalInt("audioRequestedRingerMode", snapshot.requestedRingerMode)
             .putOptionalInt(KEY_ORIGINAL_MEDIA, snapshot.originalMediaVolume)
             .putOptionalInt(KEY_APPLIED_MEDIA, snapshot.appliedMediaVolume)
             .putOptionalInt(KEY_ORIGINAL_RING_VOL, snapshot.originalRingVolume)

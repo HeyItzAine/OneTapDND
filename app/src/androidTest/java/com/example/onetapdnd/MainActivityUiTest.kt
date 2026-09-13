@@ -6,6 +6,9 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertHeightIsEqualTo
+import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -27,6 +30,7 @@ class MainActivityUiTest {
         }
         listOf(RingerMode.SILENT, RingerMode.VIBRATE, RingerMode.SOUND).forEach { mode ->
             compose.onNodeWithContentDescription(mode.label).assertIsDisplayed().performClick().assertIsSelected()
+                .assertWidthIsEqualTo(72.dp).assertHeightIsEqualTo(64.dp)
             RingerMode.entries.filter { it != mode }.forEach {
                 compose.onNodeWithContentDescription(it.label).assertIsNotSelected()
             }

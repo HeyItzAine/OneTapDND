@@ -37,19 +37,19 @@ internal fun RingerModeSelector(selected: RingerMode, onSelected: (RingerMode) -
     val track = Color(0xFF211F1E)
     val thumb = Color(0xFFD0CBC9)
     Column(
-        modifier = Modifier.widthIn(max = 360.dp).fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        modifier = Modifier.widthIn(max = 216.dp).fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val trackHeight = maxWidth / 2.3f
-            val diameter = trackHeight - 28.dp
+            val trackHeight = 64.dp
+            val diameter = 48.dp
             val thumbOffset by animateDpAsState(
                 maxWidth / 3 * (selected.ordinal + 0.5f) - diameter / 2,
                 animationSpec = tween(220), label = "Ringer position"
             )
             Box(Modifier.fillMaxWidth().height(trackHeight).clip(CircleShape).background(track)) {
                 Box(
-                    Modifier.offset(x = thumbOffset, y = 14.dp).size(diameter)
+                    Modifier.offset(x = thumbOffset, y = 8.dp).size(diameter)
                         .background(thumb, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
@@ -61,7 +61,7 @@ internal fun RingerModeSelector(selected: RingerMode, onSelected: (RingerMode) -
                         }),
                         contentDescription = null,
                         tint = track,
-                        modifier = Modifier.size(diameter * 0.42f)
+                        modifier = Modifier.size(24.dp)
                     )
                 }
                 Row(Modifier.fillMaxWidth().fillMaxHeight().selectableGroup()) {
@@ -76,7 +76,7 @@ internal fun RingerModeSelector(selected: RingerMode, onSelected: (RingerMode) -
                             contentAlignment = Alignment.Center
                         ) {
                             if (selected != mode) {
-                                Box(Modifier.size(11.dp).background(Color(0xFF969291), CircleShape))
+                                Box(Modifier.size(6.dp).background(Color(0xFF969291), CircleShape))
                             }
                         }
                     }
@@ -86,7 +86,7 @@ internal fun RingerModeSelector(selected: RingerMode, onSelected: (RingerMode) -
         Row(Modifier.fillMaxWidth()) {
             RingerMode.entries.forEach { mode ->
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Text(mode.label, style = MaterialTheme.typography.labelLarge)
+                    Text(mode.label, style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
