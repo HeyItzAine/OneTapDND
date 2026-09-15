@@ -4,6 +4,7 @@ internal interface RingerAccess {
     var mode: Int
     val hasPolicyAccess: Boolean
     val isVolumeFixed: Boolean
+    val isDndActive: Boolean get() = false
 
     fun setSilentMode() {
         // A DND-masked Silent read can hide Normal or Vibrate internally.
@@ -18,8 +19,10 @@ internal data class RingerUpdate(val snapshot: AudioSnapshot, val error: String?
 internal class RingerController(private val access: RingerAccess) {
     fun apply(snapshot: AudioSnapshot, target: RingerMode, originalBeforeDnd: Int? = null): RingerUpdate {
         val current = access.mode
-        val needsWrite = current != target.platformValue ||
-            (target == RingerMode.SILENT && snapshot.requestedRingerMode != target.platformValue)
+        val maskedAppliedRequest = access.isDndActive && current == RingerMode.SILENT.platformValue &&
+            snapshot.requestedRingerMode == target.platformValue && snapshot.appliedRingerMode != null
+        val needsWrite = !maskedAppliedRequest && (current != target.platformValue ||
+            (target == RingerMode.SILENT && snapshot.requestedRingerMode != target.platformValue))
         if (needsWrite && !access.hasPolicyAccess) {
             return RingerUpdate(snapshot, "Allow DND access to change the ringer mode.")
         }
@@ -32,7 +35,9 @@ internal class RingerController(private val access: RingerAccess) {
                 if (target == RingerMode.SILENT) access.setSilentMode() else access.mode = target.platformValue
             }
             val actual = access.mode
-            if (actual == target.platformValue) {
+            val maskedResult = access.isDndActive && actual == RingerMode.SILENT.platformValue &&
+                target != RingerMode.SILENT
+            if (actual == target.platformValue || maskedAppliedRequest || maskedResult) {
                 RingerUpdate(snapshot.copy(originalRingerMode = original, appliedRingerMode = actual,
                     requestedRingerMode = target.platformValue))
             } else {

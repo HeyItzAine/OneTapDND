@@ -63,6 +63,11 @@
 
         <receiver android:name=".GeofenceReceiver" android:exported="false" />
         <receiver android:name=".PauseActionReceiver" android:exported="false" />
+        <receiver android:name=".DndStateReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.app.action.AUTOMATIC_ZEN_RULE_STATUS_CHANGED" />
+            </intent-filter>
+        </receiver>
         <receiver android:name=".RestoreReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

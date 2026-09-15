@@ -11,6 +11,7 @@ class RingerControllerTest {
         val writes = mutableListOf<Int>()
         override var hasPolicyAccess = true
         override var isVolumeFixed = false
+        override var isDndActive = false
         override var mode: Int
             get() = actual
             set(value) {
@@ -137,5 +138,31 @@ class RingerControllerTest {
         val result = RingerController(access).apply(snapshot, RingerMode.SILENT)
         assertEquals(listOf(2, 0), access.writes)
         assertEquals(1, result.snapshot.originalRingerMode)
+    }
+
+    @Test fun repeatedDndMaskedSoundAndVibrateDoNotWriteAgain() {
+        listOf(RingerMode.SOUND, RingerMode.VIBRATE).forEach { target ->
+            val access = FakeRinger(2)
+            val controller = RingerController(access)
+            var snapshot = controller.apply(AudioSnapshot(), target).snapshot
+            access.actual = 0
+            access.isDndActive = true
+            access.writes.clear()
+            repeat(100) {
+                val result = controller.apply(snapshot, target, snapshot.originalRingerMode)
+                assertNull(result.error)
+                snapshot = result.snapshot
+            }
+            assertTrue("DND must not cause repeated ringer writes for $target", access.writes.isEmpty())
+            assertEquals(2, snapshot.originalRingerMode)
+        }
+    }
+
+    @Test fun maskedRingerStillAppliesAChangedPlaceRequest() {
+        val access = FakeRinger(0).apply { isDndActive = true }
+        val snapshot = AudioSnapshot(originalRingerMode = 2, appliedRingerMode = 0, requestedRingerMode = 2)
+        val result = RingerController(access).apply(snapshot, RingerMode.VIBRATE, 2)
+        assertEquals(listOf(1), access.writes)
+        assertEquals(1, result.snapshot.requestedRingerMode)
     }
 }

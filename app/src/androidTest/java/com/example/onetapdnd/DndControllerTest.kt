@@ -3,9 +3,11 @@ package com.example.onetapdnd
 import android.Manifest
 import android.app.NotificationManager
 import android.os.Build
+import android.os.ParcelFileDescriptor
 import android.service.notification.Condition
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.work.WorkManager
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -21,29 +23,33 @@ class DndControllerTest {
     private val store = PlaceStore(context)
 
     @Before fun prepare() {
-        instrumentation.uiAutomation.executeShellCommand("cmd notification allow_dnd ${context.packageName}").close()
-        instrumentation.uiAutomation.executeShellCommand(
+        shell("cmd notification allow_dnd ${context.packageName}")
+        shell(
             "pm grant ${context.packageName} ${Manifest.permission.ACCESS_COARSE_LOCATION}"
-        ).close()
-        instrumentation.uiAutomation.executeShellCommand(
+        )
+        shell(
             "pm grant ${context.packageName} ${Manifest.permission.ACCESS_FINE_LOCATION}"
-        ).close()
+        )
         if (Build.VERSION.SDK_INT >= 29) {
-            instrumentation.uiAutomation.executeShellCommand(
+            shell(
                 "pm grant ${context.packageName} ${Manifest.permission.ACCESS_BACKGROUND_LOCATION}"
-            ).close()
+            )
         }
         val locationCommand = if (Build.VERSION.SDK_INT >= 28) {
             "cmd location set-location-enabled true"
         } else {
             "settings put secure location_mode 3"
         }
-        instrumentation.uiAutomation.executeShellCommand(locationCommand).close()
+        shell(locationCommand)
         eventually { manager.isNotificationPolicyAccessGranted }
         clean()
     }
 
     @After fun clean() {
+        store.preferences.edit().clear().commit()
+        WorkManager.getInstance(context).cancelAllWork().result.get()
+        // Let canceled workers and delayed rule broadcasts finish before the next fixture.
+        Thread.sleep(600)
         store.preferences.edit().clear().commit()
         if (manager.isNotificationPolicyAccessGranted) {
             manager.automaticZenRules.keys.forEach { manager.removeAutomaticZenRule(it) }
@@ -69,7 +75,7 @@ class DndControllerTest {
         store.saveState(store.state().transition(setOf("b"), false))
         DndController(context).sync()
         eventually { manager.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_PRIORITY }
-        DndController(context).toggle()
+        DndController(context).setManualEnabled(true)
         eventually { DndController(context).isOn() }
         MonitoringCoordinator(context).pauseFor(60)
         eventually { store.isPaused() }
@@ -112,4 +118,7 @@ class DndControllerTest {
         repeat(40) { if (check()) return; Thread.sleep(100) }
         assertTrue("DND state did not settle", check())
     }
+
+    private fun shell(command: String) = ParcelFileDescriptor.AutoCloseInputStream(
+        instrumentation.uiAutomation.executeShellCommand(command)).bufferedReader().use { it.readText() }
 }

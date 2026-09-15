@@ -32,6 +32,20 @@ class DndController(private val context: Context) {
 
     fun isManualDndRequested(): Boolean = requested(KEY_MANUAL)
 
+    fun isDeviceDndOn(): Boolean = when (manager.currentInterruptionFilter) {
+        NotificationManager.INTERRUPTION_FILTER_PRIORITY,
+        NotificationManager.INTERRUPTION_FILTER_ALARMS,
+        NotificationManager.INTERRUPTION_FILTER_NONE -> true
+        else -> false
+    }
+
+    fun isPlaceRuleActive(): Boolean = hasAccess &&
+        manager.automaticZenRules.any { (id, rule) ->
+            rule.conditionId == uri(KEY_PLACES) && rule.isEnabled &&
+                if (Build.VERSION.SDK_INT >= 35) manager.getAutomaticZenRuleState(id) == Condition.STATE_TRUE
+                else requested(KEY_PLACES) && isDeviceDndOn()
+        }
+
     fun activeRuleIds(): Set<String> = if (!hasAccess) emptySet() else
         manager.automaticZenRules.filter { (id, rule) ->
             KEYS.any { rule.conditionId == uri(it) } && rule.isEnabled &&
@@ -45,8 +59,13 @@ class DndController(private val context: Context) {
         // Recover only our previously active rules that are still requested.
         manager.automaticZenRules.filterKeys { it in previouslyActive }.forEach { (id, rule) ->
             if (requested(rule.conditionId.lastPathSegment.orEmpty())) {
-                manager.setAutomaticZenRuleState(id, Condition(rule.conditionId, "One Tap DND", Condition.STATE_FALSE))
-                manager.setAutomaticZenRuleState(id, condition(rule.conditionId))
+                if (Build.VERSION.SDK_INT >= 35) {
+                    manager.setAutomaticZenRuleState(id, condition(rule.conditionId, userAction = true))
+                    manager.setAutomaticZenRuleState(id, condition(rule.conditionId))
+                } else {
+                    manager.setAutomaticZenRuleState(id, Condition(rule.conditionId, "One Tap DND", Condition.STATE_FALSE))
+                    manager.setAutomaticZenRuleState(id, condition(rule.conditionId))
+                }
             }
         }
     }
@@ -67,8 +86,19 @@ class DndController(private val context: Context) {
         }
     }
 
-    fun toggle() {
-        setManualEnabled(!isManualDndRequested())
+    // False means Android settings must handle DND owned by the system or another app.
+    fun toggle(): Boolean {
+        check(hasAccess)
+        if (isDeviceDndOn()) {
+            if (!isOn()) return false
+            preferences.edit().putBoolean(KEY_MANUAL, false).commit()
+            if (isPlaceDndRequested()) MonitoringCoordinator(context).pauseFor(60)
+            sync(userAction = true)
+        } else {
+            setManualEnabled(true)
+        }
+        MonitoringCoordinator(context).reconcile()
+        return true
     }
 
     fun setManualEnabled(enabled: Boolean) {
@@ -119,7 +149,13 @@ class DndController(private val context: Context) {
                 }
             }
             if (Build.VERSION.SDK_INT >= 29) {
-                ids.forEach { id -> manager.setAutomaticZenRuleState(id, condition(uri(key), userAction)) }
+                ids.forEach { id ->
+                    manager.setAutomaticZenRuleState(id, condition(uri(key), userAction))
+                    if (userAction && Build.VERSION.SDK_INT >= 35) {
+                        // Acknowledge the matching automatic state so the next place exit can release it.
+                        manager.setAutomaticZenRuleState(id, condition(uri(key)))
+                    }
+                }
             }
         }
         if (Build.VERSION.SDK_INT < 29) DndConditionService.publish(context)

@@ -2,6 +2,10 @@ package com.example.onetapdnd
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.NotificationManager
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.SharedPreferences
@@ -71,6 +75,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.core.content.ContextCompat
 import com.google.android.gms.location.CurrentLocationRequest
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
@@ -115,11 +120,20 @@ fun QuietPlaces() {
                 revision++
             }
         }
+        val dndChanges = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) { revision++ }
+        }
+        val filter = IntentFilter(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED).apply {
+            addAction(NotificationManager.ACTION_NOTIFICATION_POLICY_ACCESS_GRANTED_CHANGED)
+            if (Build.VERSION.SDK_INT >= 30) addAction(NotificationManager.ACTION_AUTOMATIC_ZEN_RULE_STATUS_CHANGED)
+        }
+        ContextCompat.registerReceiver(context, dndChanges, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         store.preferences.registerOnSharedPreferenceChangeListener(listener)
         lifecycle.addObserver(observer)
         onDispose {
             store.preferences.unregisterOnSharedPreferenceChangeListener(listener)
             lifecycle.removeObserver(observer)
+            context.unregisterReceiver(dndChanges)
         }
     }
 
@@ -128,6 +142,7 @@ fun QuietPlaces() {
     val precise = remember(revision) { PlaceMonitoring.hasPreciseLocation(context) }
     val background = remember(revision) { PlaceMonitoring.hasBackgroundLocation(context) }
     val hasDnd = remember(revision) { DndController(context).hasAccess }
+    val dndOn = remember(revision) { DndController(context).isDeviceDndOn() }
     val pausedUntil = remember(revision) { store.pauseUntilEpochMs() }
     val paused = pausedUntil > System.currentTimeMillis()
     var customPauseMinutes by remember(revision) { mutableIntStateOf(store.customPauseMinutes()) }
@@ -205,13 +220,24 @@ fun QuietPlaces() {
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Do Not Disturb: ${if (dndOn) "On" else "Off"}", Modifier.weight(1f))
+                Switch(checked = dndOn, enabled = hasDnd, onCheckedChange = {
+                    runCatching {
+                        if (!DndController(context).toggle()) {
+                            context.startActivity(Intent("android.settings.ZEN_MODE_SETTINGS"))
+                        }
+                    }.onFailure { feedback = "Could not change DND. Check DND access and try again." }
+                    revision++
+                })
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Quiet places", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(
                         when {
                             paused -> "Paused until ${formatTime(pausedUntil)}"
                             rules.none { it.enabled } -> "No enabled places"
-                            state.active(rules).isNotEmpty() -> "${state.active(rules).size} active"
+                            state.active(rules).isNotEmpty() -> "Inside ${state.active(rules).size} places · DND ${if (dndOn) "on" else "off"}"
                             else -> "Monitoring ${rules.count { it.enabled }} places"
                         },
                         style = MaterialTheme.typography.bodyMedium
@@ -268,7 +294,7 @@ fun QuietPlaces() {
                     onClick = { scope.launch { refreshLocation(showFeedback = true) } }
                 ) { Text(if (checkingLocation) "Checking location…" else "Check location now") }
             }
-            if (remember(revision) { DndController(context).isManualDndRequested() }) {
+            if (dndOn && remember(revision) { DndController(context).isManualDndRequested() && DndController(context).isOn() }) {
                 Text(
                     "Manual DND is enabled separately. Leaving a quiet place only ends its automatic DND.",
                     style = MaterialTheme.typography.bodySmall

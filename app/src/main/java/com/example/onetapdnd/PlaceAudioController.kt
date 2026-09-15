@@ -20,6 +20,7 @@ class PlaceAudioController(context: Context) {
             }
         override val hasPolicyAccess get() = notificationManager.isNotificationPolicyAccessGranted
         override val isVolumeFixed get() = audioManager.isVolumeFixed
+        override val isDndActive get() = notificationManager.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL
     })
 
     fun prepare(mode: PlaceAudioMode?) {

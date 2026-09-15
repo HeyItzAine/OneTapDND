@@ -39,7 +39,9 @@ class PlaceExitTest {
     }
 
     @After fun clean() {
+        store.preferences.edit().clear().commit()
         WorkManager.getInstance(context).cancelAllWork().result.get()
+        Thread.sleep(600)
         MediaMuteService.stop(context)
         store.preferences.edit().clear().commit()
         manager.automaticZenRules.keys.forEach { manager.removeAutomaticZenRule(it) }

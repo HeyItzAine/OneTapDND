@@ -82,7 +82,7 @@ class MonitoringCoordinator(context: Context) {
                 (store.pauseUntilEpochMs() - System.currentTimeMillis()).coerceAtLeast(0L)
             )
         }
-        val requestedMode = effectiveAudioMode()
+        val requestedMode = requestedAudioMode()
         val audioController = PlaceAudioController(context)
         val dnd = DndController(context)
         val rulesBeforeRestore = dnd.activeRuleIds()
@@ -95,7 +95,8 @@ class MonitoringCoordinator(context: Context) {
             store.status("Could not change DND. Check DND access, then retry.")
             false
         }
-        val mode = requestedMode.takeIf { dndReady }
+        val mode = requestedMode.takeIf { dndReady && dnd.isPlaceRuleActive() }
+        if (mode != requestedMode) audioController.prepare(mode)
         if (dndReady) {
             val activeRules = dnd.activeRuleIds() + rulesBeforeRestore
             val deferRestore = mode?.ringer == null && store.pendingRingerRestore() != null
@@ -132,6 +133,11 @@ class MonitoringCoordinator(context: Context) {
     }
 
     fun effectiveAudioMode(): PlaceAudioMode? {
+        if (!DndController(context).isPlaceRuleActive()) return null
+        return requestedAudioMode()
+    }
+
+    private fun requestedAudioMode(): PlaceAudioMode? {
         if (store.isPaused() || !canMonitorPlaces()) return null
         return store.state().strongestMode(store.rules())
     }

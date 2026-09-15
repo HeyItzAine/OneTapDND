@@ -43,26 +43,9 @@ class DndTileService : TileService() {
 
     private fun toggle() {
         try {
-            val store = PlaceStore(this)
-            val coordinator = MonitoringCoordinator(this)
-            when {
-                store.isPaused() -> {
-                    coordinator.resumeNow()
-                    updateTileState()
-                    return
-                }
-                !DndController(this).hasAccess -> {
-                    openSettings()
-                    return
-                }
-                store.state().active(store.rules()).isNotEmpty() -> {
-                    coordinator.pauseFor(60)
-                    updateTileState()
-                    return
-                }
-            }
             val controller = DndController(this)
-            controller.toggle()
+            if (!controller.hasAccess) { openSettings(); return }
+            if (!controller.toggle()) launch(Intent("android.settings.ZEN_MODE_SETTINGS"))
             updateTileState()
         } catch (_: SecurityException) {
             openSettings()
@@ -90,22 +73,19 @@ class DndTileService : TileService() {
 
     private fun updateTileState() {
         val tile = qsTile ?: return
-        runCatching { MonitoringCoordinator(this).reconcile() }
         val store = PlaceStore(this)
         val paused = store.isPaused()
-        val insidePlace = !paused && store.state().active(store.rules()).isNotEmpty()
         val controller = DndController(this)
         val hasAccess = controller.hasAccess
-        val on = runCatching { controller.isOn() }.getOrDefault(false)
-        tile.state = if (!paused && (insidePlace || on)) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
-        val manager = getSystemService(NotificationManager::class.java)
+        val on = controller.isDeviceDndOn()
+        val ownedOn = runCatching { controller.isOn() }.getOrDefault(false)
+        tile.state = if (on) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
         if (Build.VERSION.SDK_INT >= 29) {
             tile.subtitle = when {
-                paused -> "Paused · tap to resume"
                 !hasAccess -> getString(R.string.tile_tap_to_setup)
-                insidePlace -> "Quiet place · tap to pause 1h"
+                on && !ownedOn -> "On · manage in Android"
                 on -> getString(R.string.tile_on)
-                manager.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL -> "Other mode active"
+                paused -> "Off · quiet places paused"
                 else -> getString(R.string.tile_off)
             }
         }
