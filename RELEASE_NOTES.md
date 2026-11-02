@@ -1,14 +1,13 @@
-Download **OneTapDND.apk** and install it over your existing app. Installations signed with the existing release key keep saved places and settings.
+Download **OneTapDND.apk** and install it over your existing release. The existing signing key is retained, so saved places and settings are preserved.
 
-- Add a three-position selector for Time based, Location based, and Hybrid automation. Tap or drag to select a mode.
-- Set a daily start time and a duration, or choose an end time. Quiet time can cross midnight.
-- Hybrid enables automatic DND when either the daily time window or a saved place is active. It ends when both triggers are inactive. Separately enabled manual DND remains independent.
-- Add optional audio profiles for the phone speaker and wired, USB, or Bluetooth headphones. Each profile controls the ringer and media muting during automatic DND.
-- Move permissions below the main controls, followed by app icon settings.
-- Include the DND state synchronization and quiet-place flicker fixes since the previous release.
+- Add multiple daily quiet periods, each with its own on/off switch. Edit a period by tapping its clock row, or delete it from its menu.
+- Replace the old time controls with a minimal clock list and an analog clock editor. Choose Start and End times, use keyboard input, or apply a 20-, 30-, or 60-minute duration shortcut.
+- Support overlapping periods and windows crossing midnight. Automatic DND stays active until every active period ends; Hybrid also stays active while a saved place is active.
+- Preserve existing single-period schedules when upgrading. Deleting the last period keeps the schedule empty, including after reopening the app.
+- Keep Save and Cancel reachable on smaller screens.
 
-Allow **Alarms & reminders** for precise timing. Without it, Android may delay scheduled changes. Location and Hybrid modes still need precise and background location access. Existing installations default to Location based mode; daily quiet time and connection profiles are opt-in.
+Allow **Alarms & reminders** for precise scheduled changes. Without access, Android may delay them. Separately enabled manual DND remains independent.
 
-Validation: debug APK built successfully and all 49 unit tests passed, including daily start/end boundaries and a window crossing midnight. Physical-device checks of headphone switching and background timing are still needed. The release workflow runs unit tests, release lint, optimized APK constructor checks, and signing-certificate verification before publishing.
+Validation: all 54 unit tests and two emulator tests passed. The emulator tests cover adding, disabling, deleting, migration, persistence, and enabling an empty schedule. The clock list and editor were visually checked on the emulator. Debug lint passed with no errors. Physical-device timing and headphone checks remain outstanding. The release workflow runs unit tests, release lint, optimized APK constructor checks, and signing-certificate verification before publishing.
 
-Version 1.5.0 uses internal version code 14.
+Version 1.5.1 uses internal version code 15.
