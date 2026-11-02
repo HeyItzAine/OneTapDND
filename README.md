@@ -14,6 +14,14 @@ Download **OneTapDND.apk** from [GitHub Releases](../../releases/latest) and ope
 
 The tile controls this app's rules. DND enabled by another Android mode can remain active; the tile then shows **Other mode active**. A locked phone must be unlocked before changing the tile.
 
+## Automation modes
+
+Tap or drag the three-position selector to choose **Time based**, **Location based**, or **Hybrid**. Time based uses a daily start time with a duration or an explicit end time, including windows that cross midnight. Hybrid activates automatic DND whenever either the time window or a saved place is active; it ends when both are inactive. Manual DND remains independent.
+
+Enable **Audio by connection** to configure separate ringer and media-mute settings for the phone speaker and wired, USB, or Bluetooth headphones during automatic DND. These profiles override individual place audio settings while enabled. Existing installations keep Location based mode, with time scheduling and connection profiles off until enabled.
+
+Permissions appear below the main controls, followed by app icon settings. Allow **Alarms & reminders** for precise scheduled changes; Android may delay timing without this access.
+
 ## Quiet places
 
 Choose **Add place**, search an address, read one from a screenshot, use your current location, or enter coordinates copied from a Google Maps pin. The screenshot reader recognizes addresses, place names, plus codes, and common coordinate formats, then fills the form and looks up the pin. Check the extracted text and preview the position before saving. Set a radius from **100 to 10,000 meters**; 200 meters is a practical starting point.
@@ -34,7 +42,8 @@ Places can be edited, disabled, or deleted. Search, screenshot recognition, past
 - **Precise and background location:** detect arrivals and departures for quiet places, including when the app is closed.
 - **Notifications:** shows quiet-place status and pause controls. Denying it does not disable monitoring.
 - **Audio settings:** applies the sound, vibrate, silent, and media-mute choices saved for each place.
-- **Foreground service:** enforces media volume zero only while that place mode is active.
+- **Foreground service:** applies media muting and responds to headphone connections during active automatic DND.
+- **Alarms & reminders:** starts and ends daily quiet time precisely when access is granted.
 - **Internet:** supports address lookup and the location services dependency.
 - **Boot completed:** restores place monitoring after restarting the phone.
 
