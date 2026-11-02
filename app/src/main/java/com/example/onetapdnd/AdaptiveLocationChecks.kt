@@ -73,7 +73,7 @@ object AdaptiveLocationChecks {
 
     private fun shouldRun(context: Context): Boolean {
         val store = PlaceStore(context)
-        return !store.isPaused() &&
+        return AutomationSettings(context).mode.usesLocation && !store.isPaused() &&
             store.rules().any { it.enabled } &&
             DndController(context).hasAccess &&
             PlaceMonitoring.hasPreciseLocation(context) &&

@@ -90,7 +90,7 @@ class MainActivity : ComponentActivity() {
                         onGrantNotifications = { requestNotificationPermission() },
                         onAddTile = { requestTileAddition() },
                         onIconStyleSelected = { requestIconStyle(it) },
-                        placesContent = { QuietPlaces() },
+                        placesContent = { AutomationPanel() },
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
@@ -277,6 +277,10 @@ fun SetupScreen(
             )
         }
 
+        placesContent()
+
+        LocationPermissionsCard()
+        TimingPermissionCard()
         StatusCard(
             title = stringResource(R.string.dnd_access_title),
             status = if (dndGranted) stringResource(R.string.allowed) else stringResource(R.string.action_required),
@@ -301,7 +305,7 @@ fun SetupScreen(
             onAction = onAddTile
         )
 
-        placesContent()
+
 
         CollapsibleCard(
             title = stringResource(R.string.icon_style_title),

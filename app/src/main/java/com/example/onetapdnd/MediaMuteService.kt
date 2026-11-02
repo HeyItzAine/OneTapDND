@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.database.ContentObserver
 import android.media.AudioManager
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -15,6 +17,10 @@ class MediaMuteService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var audioManager: AudioManager
     private var observerRegistered = false
+    private val devices = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) { MonitoringCoordinator(this@MediaMuteService).reconcile() }
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) { MonitoringCoordinator(this@MediaMuteService).reconcile() }
+    }
 
     private val watchdog = object : Runnable {
         override fun run() {
@@ -54,6 +60,7 @@ class MediaMuteService : Service() {
             contentResolver.registerContentObserver(Settings.System.CONTENT_URI, true, volumeObserver)
             true
         }.getOrDefault(false)
+        audioManager.registerAudioDeviceCallback(devices, handler)
         handler.post(watchdog)
     }
 
@@ -69,6 +76,7 @@ class MediaMuteService : Service() {
 
     override fun onDestroy() {
         if (instance === this) instance = null
+        audioManager.unregisterAudioDeviceCallback(devices)
         handler.removeCallbacks(watchdog)
         if (observerRegistered) runCatching { contentResolver.unregisterContentObserver(volumeObserver) }
         super.onDestroy()
@@ -77,7 +85,7 @@ class MediaMuteService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun shouldEnforce(): Boolean {
-        return MonitoringCoordinator(this).effectiveAudioMode()?.mutesMedia == true
+        return MonitoringCoordinator(this).effectiveAudioMode() != null
     }
 
     private fun enforceMediaMute() {
@@ -86,7 +94,7 @@ class MediaMuteService : Service() {
             return
         }
         val audioController = PlaceAudioController(this)
-        audioController.enforceMediaZero()
+        if (MonitoringCoordinator(this).effectiveAudioMode()?.mutesMedia == true) audioController.enforceMediaZero()
     }
 
     companion object {

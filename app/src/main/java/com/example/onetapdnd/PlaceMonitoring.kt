@@ -69,6 +69,7 @@ class PlaceRegistrationWorker(context: Context, parameters: WorkerParameters) : 
         val client = LocationServices.getGeofencingClient(context)
         val rules = store.rules().filter { it.enabled }
         val problem = when {
+            !AutomationSettings(context).mode.usesLocation -> "Location mode is off."
             store.isPaused() -> "Quiet places paused."
             rules.isEmpty() -> "No places enabled."
             !DndController(context).hasAccess -> "Grant DND access to enable quiet places."

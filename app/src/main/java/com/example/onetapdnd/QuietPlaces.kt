@@ -257,34 +257,9 @@ fun QuietPlaces() {
                 }
             }
 
-            if (!hasDnd) {
-                Text(
-                    "DND access is off. Enable it to apply this place's DND and ringer settings.",
-                    color = MaterialTheme.colorScheme.error
-                )
-                Button(onClick = { dndSettings() }) { Text("Allow DND access") }
-            }
             remember(revision) { store.audioError() }?.let { message ->
                 Text(message, color = MaterialTheme.colorScheme.error)
                 TextButton(onClick = { coordinator.reconcile() }) { Text("Retry sound settings") }
-            }
-            if (!precise) {
-                Button(onClick = {
-                    foregroundRequest.launch(
-                        arrayOf(
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION
-                        )
-                    )
-                }) { Text("Allow precise location") }
-            } else if (!background) {
-                Button(onClick = {
-                    if (Build.VERSION.SDK_INT == 29) {
-                        backgroundRequest.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-                    } else {
-                        appSettings()
-                    }
-                }) { Text("Allow background location") }
             }
             feedback?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 

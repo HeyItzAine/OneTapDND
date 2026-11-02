@@ -20,11 +20,7 @@ class DndController(private val context: Context) {
 
     private fun requested(key: String): Boolean = when (key) {
         KEY_MANUAL -> preferences.getBoolean(KEY_MANUAL, false)
-        KEY_PLACES -> !store.isPaused() &&
-            PlaceMonitoring.hasPreciseLocation(context) &&
-            PlaceMonitoring.hasBackgroundLocation(context) &&
-            PlaceMonitoring.locationEnabled(context) &&
-            store.state().active(store.rules()).isNotEmpty()
+        KEY_PLACES -> AutomationSettings(context).requestedAudioMode() != null
         else -> false
     }
 
@@ -135,7 +131,7 @@ class DndController(private val context: Context) {
             if (ids.isEmpty() && requested(key)) {
                 @Suppress("DEPRECATION")
                 val rule = AutomaticZenRule(
-                    if (key == KEY_MANUAL) "One Tap DND" else "Quiet places",
+                    if (key == KEY_MANUAL) "One Tap DND" else "DND automation",
                     ComponentName(context, DndConditionService::class.java),
                     uri(key),
                     NotificationManager.INTERRUPTION_FILTER_PRIORITY,

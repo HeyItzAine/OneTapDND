@@ -74,6 +74,7 @@ class MonitoringCoordinator(context: Context) {
     }
 
     fun reconcile(): Unit = synchronized(stateLock) {
+        AutomationSettings(context).schedule()
         val pauseExpired = store.clearExpiredPause()
         if (store.isPaused()) {
             store.clearPosition()
@@ -86,7 +87,6 @@ class MonitoringCoordinator(context: Context) {
         val audioController = PlaceAudioController(context)
         val dnd = DndController(context)
         val rulesBeforeRestore = dnd.activeRuleIds()
-        if (requestedMode?.mutesMedia != true) MediaMuteService.stop(context)
         audioController.prepare(requestedMode)
         val dndReady = runCatching {
             dnd.sync()
@@ -109,7 +109,7 @@ class MonitoringCoordinator(context: Context) {
             audioController.prepare(null)
             audioController.apply(null)
         }
-        if (mode?.mutesMedia == true) {
+        if (mode != null && (mode.mutesMedia || AutomationSettings(context).profilesEnabled)) {
             runCatching { MediaMuteService.start(context) }.onFailure {
                 store.status("Media mute could not stay active. Open the app to retry.")
             }
@@ -138,12 +138,11 @@ class MonitoringCoordinator(context: Context) {
     }
 
     private fun requestedAudioMode(): PlaceAudioMode? {
-        if (store.isPaused() || !canMonitorPlaces()) return null
-        return store.state().strongestMode(store.rules())
+        return AutomationSettings(context).requestedAudioMode()
     }
 
     private fun canMonitorPlaces(): Boolean =
-        DndController(context).hasAccess &&
+        AutomationSettings(context).mode.usesLocation && DndController(context).hasAccess &&
             PlaceMonitoring.hasPreciseLocation(context) &&
             PlaceMonitoring.hasBackgroundLocation(context) &&
             PlaceMonitoring.locationEnabled(context)
