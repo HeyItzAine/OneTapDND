@@ -16,7 +16,7 @@ The tile controls this app's rules. DND enabled by another Android mode can rema
 
 ## Automation modes
 
-Tap or drag the three-position selector to choose **Time based**, **Location based**, or **Hybrid**. Time based uses a daily start time with a duration or an explicit end time, including windows that cross midnight. Hybrid activates automatic DND whenever either the time window or a saved place is active; it ends when both are inactive. Manual DND remains independent.
+Tap or drag the three-position selector to choose **Time based**, **Location based**, or **Hybrid**. Time based supports multiple daily quiet periods. Add each period with the clock editor, choose start and end times or a 20-, 30-, or 60-minute shortcut, and turn individual periods on or off. Tap a clock row to edit it, or use its menu to delete it. Periods can cross midnight or overlap; DND stays active until every active period ends. Existing single-period schedules are preserved. Hybrid activates automatic DND whenever either the time window or a saved place is active; it ends when both are inactive. Manual DND remains independent.
 
 Enable **Audio by connection** to configure separate ringer and media-mute settings for the phone speaker and wired, USB, or Bluetooth headphones during automatic DND. These profiles override individual place audio settings while enabled. Existing installations keep Location based mode, with time scheduling and connection profiles off until enabled.
 

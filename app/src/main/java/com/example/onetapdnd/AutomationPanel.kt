@@ -1,12 +1,10 @@
 package com.example.onetapdnd
 
 import android.Manifest
-import android.app.TimePickerDialog
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import android.text.format.DateFormat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateDpAsState
@@ -25,7 +23,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
 
 @Composable
 fun AutomationPanel() {
@@ -33,7 +30,7 @@ fun AutomationPanel() {
     val settings = remember { AutomationSettings(context) }
     var mode by remember { mutableStateOf(settings.mode) }
     var enabled by remember { mutableStateOf(settings.enabled) }
-    var window by remember { mutableStateOf(settings.window) }
+    var quietTimes by remember { mutableStateOf(settings.quietTimes) }
     var profiles by remember { mutableStateOf(settings.profilesEnabled) }
     var pauseRevision by remember { mutableIntStateOf(0) }
     fun changed() { MonitoringCoordinator(context).onPlacesChanged() }
@@ -52,45 +49,18 @@ fun AutomationPanel() {
     }, style = MaterialTheme.typography.bodyMedium)
 
     if (mode.usesTime) {
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Daily quiet time", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                    Switch(enabled, { enabled = it; settings.enabled = it; changed() })
-                }
-                OutlinedButton(onClick = {
-                    TimePickerDialog(context, { _, hour, minute ->
-                        window = window.copy(startMinute = hour * 60 + minute)
-                        settings.window = window
-                        changed()
-                    }, window.startMinute / 60, window.startMinute % 60, DateFormat.is24HourFormat(context)).show()
-                }) { Text("Start at ${clockLabel(window.startMinute)}") }
-                var endTime by remember { mutableStateOf(false) }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Choose an end time", Modifier.weight(1f))
-                    Switch(endTime, { endTime = it })
-                }
-                if (endTime) {
-                    val end = (window.startMinute + window.durationMinutes) % 1440
-                    OutlinedButton(onClick = {
-                        TimePickerDialog(context, { _, hour, minute ->
-                            val duration = (hour * 60 + minute - window.startMinute + 1440) % 1440
-                            window = window.copy(durationMinutes = duration.coerceAtLeast(1))
-                            settings.window = window
-                            changed()
-                        }, end / 60, end % 60, DateFormat.is24HourFormat(context)).show()
-                    }) { Text("End at ${clockLabel(end)}") }
-                } else {
-                    Text("Turn off after ${window.durationMinutes} minutes")
-                    Slider(window.durationMinutes.toFloat().coerceIn(5f, 180f), {
-                        window = window.copy(durationMinutes = (it / 5).roundToInt().coerceIn(1, 36) * 5)
-                    }, valueRange = 5f..180f, steps = 34, onValueChangeFinished = {
-                        settings.window = window; changed()
-                    })
-                }
-                Text("Every day · ${clockLabel(window.startMinute)} – ${clockLabel((window.startMinute + window.durationMinutes) % 1440)}${if (window.startMinute + window.durationMinutes >= 1440) " (next day)" else ""}", style = MaterialTheme.typography.bodySmall)
+        DailyQuietTimes(
+            times = quietTimes,
+            enabled = enabled,
+            onEnabledChange = { enabled = it; settings.enabled = it; changed() },
+            onTimesChange = {
+                val firstTime = quietTimes.isEmpty() && it.isNotEmpty()
+                quietTimes = it
+                settings.quietTimes = it
+                if (firstTime && !enabled) { enabled = true; settings.enabled = true }
+                changed()
             }
-        }
+        )
     }
     if (mode.usesLocation) QuietPlaces()
     if (!mode.usesLocation) {
@@ -112,16 +82,6 @@ fun AutomationPanel() {
             }
         }
     }
-}
-
-@Composable
-private fun clockLabel(minute: Int): String {
-    val context = LocalContext.current
-    val time = java.util.Calendar.getInstance().apply {
-        set(java.util.Calendar.HOUR_OF_DAY, minute / 60)
-        set(java.util.Calendar.MINUTE, minute % 60)
-    }
-    return DateFormat.getTimeFormat(context).format(time.time)
 }
 
 @Composable
