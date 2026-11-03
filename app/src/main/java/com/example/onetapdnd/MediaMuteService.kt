@@ -1,6 +1,7 @@
 package com.example.onetapdnd
 
 import android.app.Service
+import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
 import android.database.ContentObserver
@@ -17,6 +18,26 @@ class MediaMuteService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var audioManager: AudioManager
     private var observerRegistered = false
+    private var restoringAudio = false
+    private val audioRestore = object : Runnable {
+        override fun run() {
+            if (runCatching { shouldEnforce() }.getOrDefault(false)) {
+                restoringAudio = false
+                return
+            }
+            val restored = runCatching { MonitoringCoordinator(this@MediaMuteService).finishAudioRestoration() }
+                .getOrDefault(false)
+            if (restored) {
+                restoringAudio = false
+                if (!runCatching { shouldEnforce() }.getOrDefault(false)) stopSelf()
+            } else {
+                handler.postDelayed(this, 350L)
+            }
+        }
+    }
+    private val boundaryAlarm = AlarmManager.OnAlarmListener {
+        MonitoringCoordinator(this).reconcile()
+    }
     private val devices = object : AudioDeviceCallback() {
         override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) { MonitoringCoordinator(this@MediaMuteService).reconcile() }
         override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) { MonitoringCoordinator(this@MediaMuteService).reconcile() }
@@ -25,9 +46,7 @@ class MediaMuteService : Service() {
     private val watchdog = object : Runnable {
         override fun run() {
             enforceMediaMute()
-            if (runCatching { !audioManager.isVolumeFixed }.getOrDefault(false)) {
-                handler.postDelayed(this, WATCHDOG_INTERVAL_MS)
-            }
+            handler.postDelayed(this, WATCHDOG_INTERVAL_MS)
         }
     }
     private val volumeObserver = object : ContentObserver(handler) {
@@ -50,11 +69,9 @@ class MediaMuteService : Service() {
             stopSelf()
             return
         }
-        if (audioManager.isVolumeFixed) {
+        if (audioManager.isVolumeFixed && AutomationSettings(this).requestedAudioMode()?.mutesMedia == true) {
             PlaceStore(this).status("This device does not allow apps to change media volume.")
             MonitoringNotification.update(this)
-            stopSelf()
-            return
         }
         observerRegistered = runCatching {
             contentResolver.registerContentObserver(Settings.System.CONTENT_URI, true, volumeObserver)
@@ -66,18 +83,17 @@ class MediaMuteService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(MonitoringNotification.MEDIA_SERVICE_ID, MonitoringNotification.buildMediaService(this))
-        if (!runCatching { shouldEnforce() }.getOrDefault(false)) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
+        scheduleBoundaryCheck()
         enforceMediaMute()
-        return START_STICKY
+        return if (runCatching { shouldEnforce() }.getOrDefault(false)) START_STICKY else START_NOT_STICKY
     }
 
     override fun onDestroy() {
         if (instance === this) instance = null
+        getSystemService(AlarmManager::class.java).cancel(boundaryAlarm)
         audioManager.unregisterAudioDeviceCallback(devices)
         handler.removeCallbacks(watchdog)
+        handler.removeCallbacks(audioRestore)
         if (observerRegistered) runCatching { contentResolver.unregisterContentObserver(volumeObserver) }
         super.onDestroy()
     }
@@ -88,13 +104,37 @@ class MediaMuteService : Service() {
         return MonitoringCoordinator(this).effectiveAudioMode() != null
     }
 
+    private fun scheduleBoundaryCheck() {
+        val alarms = getSystemService(AlarmManager::class.java)
+        alarms.cancel(boundaryAlarm)
+        val settings = AutomationSettings(this)
+        if (!settings.mode.usesTime || !settings.enabled) return
+        val next = DailySchedule(settings.quietTimes).nextBoundary(System.currentTimeMillis()) ?: return
+        // The listener variant needs no exact-alarm permission and lives with this service.
+        // Keep the persisted broadcast alarm as the fallback after process death.
+        runCatching { alarms.setExact(AlarmManager.RTC_WAKEUP, next, "quiet-time-boundary", boundaryAlarm, handler) }
+    }
+
     private fun enforceMediaMute() {
         if (!runCatching { shouldEnforce() }.getOrDefault(false)) {
-            stopSelf()
+            // Expiry must release the rule and restore audio before the monitor exits.
+            runCatching { MonitoringCoordinator(this).reconcile() }
+            stopAfterAudioRestore()
             return
         }
         val audioController = PlaceAudioController(this)
         if (MonitoringCoordinator(this).effectiveAudioMode()?.mutesMedia == true) audioController.enforceMediaZero()
+    }
+
+    private fun stopAfterAudioRestore() {
+        if (runCatching { shouldEnforce() }.getOrDefault(false)) return
+        if (PlaceStore(this).pendingRingerRestore() == null) {
+            stopSelf()
+        } else if (!restoringAudio) {
+            restoringAudio = true
+            // Allow AudioService to finish releasing DND before restoring the ringer.
+            handler.postDelayed(audioRestore, 350L)
+        }
     }
 
     companion object {
@@ -111,7 +151,7 @@ class MediaMuteService : Service() {
 
         fun stop(context: Context) {
             // Let a pending foreground start complete before the service stops itself.
-            mainHandler.post { instance?.stopSelf() }
+            mainHandler.post { instance?.stopAfterAudioRestore() }
         }
     }
 }

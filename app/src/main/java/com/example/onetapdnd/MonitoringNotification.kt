@@ -43,8 +43,8 @@ object MonitoringNotification {
     fun buildMediaService(context: Context): Notification {
         ensureChannel(context)
         return addPauseActions(baseBuilder(context), context)
-            .setContentTitle("One Tap DND audio settings active")
-            .setContentText("Audio follows your connection settings. Pause automation to restore sound.")
+            .setContentTitle("One Tap DND automation active")
+            .setContentText("Quiet time or a saved place is active. Pause automation to restore sound.")
             .setOngoing(true)
             .build()
     }

@@ -20,7 +20,7 @@ Tap or drag the three-position selector to choose **Time based**, **Location bas
 
 Enable **Audio by connection** to configure separate ringer and media-mute settings for the phone speaker and wired, USB, or Bluetooth headphones during automatic DND. These profiles override individual place audio settings while enabled. Existing installations keep Location based mode, with time scheduling and connection profiles off until enabled.
 
-Permissions appear below the main controls, followed by app icon settings. Allow **Alarms & reminders** for precise scheduled changes; Android may delay timing without this access.
+Permissions appear below the main controls, followed by app icon settings. Allow **Alarms & reminders** for precise scheduled changes; Android may delay timing without this access. While a timed quiet period is active, the ongoing notification keeps its expiry monitor running. Expiry releases automatic DND and restores app-owned audio settings even if the boundary broadcast is delayed while the monitor is running. Android can still defer alarms in deep sleep; precise-timing access remains recommended.
 
 ## Quiet places
 
@@ -42,7 +42,7 @@ Places can be edited, disabled, or deleted. Search, screenshot recognition, past
 - **Precise and background location:** detect arrivals and departures for quiet places, including when the app is closed.
 - **Notifications:** shows quiet-place status and pause controls. Denying it does not disable monitoring.
 - **Audio settings:** applies the sound, vibrate, silent, and media-mute choices saved for each place.
-- **Foreground service:** applies media muting and responds to headphone connections during active automatic DND.
+- **Foreground service:** monitors active timed quiet periods so expiry releases automatic DND, applies media muting, and responds to headphone connections.
 - **Alarms & reminders:** starts and ends daily quiet time precisely when access is granted.
 - **Internet:** supports address lookup and the location services dependency.
 - **Boot completed:** restores place monitoring after restarting the phone.

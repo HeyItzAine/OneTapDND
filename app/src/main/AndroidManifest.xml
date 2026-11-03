@@ -114,7 +114,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Applies user-selected audio settings during active DND automation and responds to headphone connections." />
+                android:value="Monitors active quiet periods to release DND at expiry, applies audio settings, and responds to headphone connections." />
         </service>
     </application>
 

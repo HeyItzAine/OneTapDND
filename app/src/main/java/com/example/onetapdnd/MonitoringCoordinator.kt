@@ -74,7 +74,6 @@ class MonitoringCoordinator(context: Context) {
     }
 
     fun reconcile(): Unit = synchronized(stateLock) {
-        AutomationSettings(context).schedule()
         val pauseExpired = store.clearExpiredPause()
         if (store.isPaused()) {
             store.clearPosition()
@@ -109,15 +108,20 @@ class MonitoringCoordinator(context: Context) {
             audioController.prepare(null)
             audioController.apply(null)
         }
-        if (mode != null && (mode.mutesMedia || AutomationSettings(context).profilesEnabled)) {
+        val automation = AutomationSettings(context)
+        if (mode != null && (mode.mutesMedia || automation.profilesEnabled ||
+                (automation.mode.usesTime && automation.enabled))) {
             runCatching { MediaMuteService.start(context) }.onFailure {
-                store.status("Media mute could not stay active. Open the app to retry.")
+                store.status("Quiet time monitoring could not stay active. Open the app to retry.")
             }
         } else {
             MediaMuteService.stop(context)
         }
         MonitoringNotification.update(context)
         if (pauseExpired) PlaceMonitoring.schedule(context)
+        runCatching { AutomationSettings(context).schedule() }.onFailure {
+            store.status("Could not schedule the next quiet time. Open timing settings and retry.")
+        }
     }
 
     fun finishAudioRestoration(): Boolean = synchronized(stateLock) {
