@@ -40,7 +40,8 @@ class MonitoringCoordinator(context: Context) {
     }
 
     fun onLocation(location: Location): Boolean = synchronized(stateLock) {
-        if (store.isPaused() || !canMonitorPlaces() || !location.hasAccuracy() ||
+        if (store.isPaused() || !canMonitorPlaces() ||
+            !AutomationSettings(context).acceptsObservation(location.elapsedRealtimeNanos) || !location.hasAccuracy() ||
             !location.accuracy.isFinite() || location.accuracy < 0f ||
             !location.latitude.isFinite() || location.latitude !in -90.0..90.0 ||
             !location.longitude.isFinite() || location.longitude !in -180.0..180.0 ||
@@ -64,6 +65,7 @@ class MonitoringCoordinator(context: Context) {
         if (store.isPaused() || !canMonitorPlaces()) return@synchronized
         val now = SystemClock.elapsedRealtimeNanos()
         val observed = observationNanos.takeIf { it in 1L..now } ?: now
+        if (!AutomationSettings(context).acceptsObservation(observed)) return@synchronized
         val previousTime = store.lastLocationObservationNanos().takeIf { it in 1L..now } ?: 0L
         if (observed < previousTime) return@synchronized
         val enabledIds = store.rules().filter { it.enabled }.mapTo(mutableSetOf()) { it.id }
@@ -82,6 +84,7 @@ class MonitoringCoordinator(context: Context) {
                 (store.pauseUntilEpochMs() - System.currentTimeMillis()).coerceAtLeast(0L)
             )
         }
+        if (!AutomationSettings(context).locationChecksAllowed()) store.clearPosition()
         val requestedMode = requestedAudioMode()
         val audioController = PlaceAudioController(context)
         val dnd = DndController(context)
@@ -146,7 +149,7 @@ class MonitoringCoordinator(context: Context) {
     }
 
     private fun canMonitorPlaces(): Boolean =
-        AutomationSettings(context).mode.usesLocation && DndController(context).hasAccess &&
+        AutomationSettings(context).locationChecksAllowed() && DndController(context).hasAccess &&
             PlaceMonitoring.hasPreciseLocation(context) &&
             PlaceMonitoring.hasBackgroundLocation(context) &&
             PlaceMonitoring.locationEnabled(context)

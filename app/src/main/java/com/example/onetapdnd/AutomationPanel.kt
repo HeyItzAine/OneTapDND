@@ -31,7 +31,6 @@ fun AutomationPanel() {
     var mode by remember { mutableStateOf(settings.mode) }
     var enabled by remember { mutableStateOf(settings.enabled) }
     var quietTimes by remember { mutableStateOf(settings.quietTimes) }
-    var profiles by remember { mutableStateOf(settings.profilesEnabled) }
     var pauseRevision by remember { mutableIntStateOf(0) }
     fun changed() { MonitoringCoordinator(context).onPlacesChanged() }
 
@@ -45,10 +44,10 @@ fun AutomationPanel() {
     Text(when (mode) {
         AutomationMode.TIME -> "Follow your daily quiet time."
         AutomationMode.LOCATION -> "Turn on at your saved places."
-        AutomationMode.HYBRID -> "Turn on during quiet time or at a saved place. Turn off when both end."
+        AutomationMode.HYBRID -> "Time and location are used together. Location is checked only during your enabled quiet times. DND turns on only at an enabled saved place within those times."
     }, style = MaterialTheme.typography.bodyMedium)
 
-    if (mode.usesTime) {
+    if (mode == AutomationMode.TIME) {
         DailyQuietTimes(
             times = quietTimes,
             enabled = enabled,
@@ -62,12 +61,28 @@ fun AutomationPanel() {
             }
         )
     }
-    if (mode.usesLocation) QuietPlaces()
-    if (!mode.usesLocation) {
+    if (mode == AutomationMode.LOCATION) QuietPlaces()
+    if (mode == AutomationMode.HYBRID) {
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Time + location", style = MaterialTheme.typography.titleMedium)
+                Text("Set your quiet times on the Time based page and your saved places on the Location based page. Hybrid uses those saved settings.")
+            }
+        }
+    }
+    if (mode != AutomationMode.LOCATION) {
         val store = remember { PlaceStore(context) }
         val paused = remember(pauseRevision) { store.isPaused() }
         if (paused) Button(onClick = { MonitoringCoordinator(context).resumeNow(); pauseRevision++ }) { Text("Resume automation") }
     }
+}
+
+@Composable
+fun AudioConnectionSettings() {
+    val context = LocalContext.current
+    val settings = remember { AutomationSettings(context) }
+    var profiles by remember { mutableStateOf(settings.profilesEnabled) }
+    fun changed() { MonitoringCoordinator(context).onPlacesChanged() }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

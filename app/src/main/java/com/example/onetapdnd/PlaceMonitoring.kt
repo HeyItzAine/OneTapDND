@@ -69,7 +69,7 @@ class PlaceRegistrationWorker(context: Context, parameters: WorkerParameters) : 
         val client = LocationServices.getGeofencingClient(context)
         val rules = store.rules().filter { it.enabled }
         val problem = when {
-            !AutomationSettings(context).mode.usesLocation -> "Location mode is off."
+            !AutomationSettings(context).locationChecksAllowed() -> "Location checks are waiting for an active quiet time or location mode."
             store.isPaused() -> "Quiet places paused."
             rules.isEmpty() -> "No places enabled."
             !DndController(context).hasAccess -> "Grant DND access to enable quiet places."
@@ -90,12 +90,18 @@ class PlaceRegistrationWorker(context: Context, parameters: WorkerParameters) : 
         }
         return try {
             Tasks.await(client.removeGeofences(PlaceMonitoring.pendingIntent(context)), 20, TimeUnit.SECONDS)
+            val settings = AutomationSettings(context)
+            val now = System.currentTimeMillis()
+            if (!settings.locationChecksAllowed(now)) return Result.success()
+            val expiration = if (settings.mode == AutomationMode.HYBRID)
+                ((DailySchedule(settings.quietTimes).nextBoundary(now) ?: now) - now).coerceAtLeast(1L)
+                else Geofence.NEVER_EXPIRE
             val request = GeofencingRequest.Builder()
                 .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER or GeofencingRequest.INITIAL_TRIGGER_EXIT)
                 .addGeofences(rules.map { rule ->
                     Geofence.Builder().setRequestId(rule.id)
                         .setCircularRegion(rule.latitude, rule.longitude, rule.radiusMeters)
-                        .setExpirationDuration(Geofence.NEVER_EXPIRE)
+                        .setExpirationDuration(expiration)
                         .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT)
                         .setNotificationResponsiveness(60_000).build()
                 }).build()

@@ -13,6 +13,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performClick
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -57,7 +58,8 @@ class MainActivityUiTest {
         compose.onAllNodesWithText(
             "Android requires this access before One Tap DND can change Do Not Disturb or set the ringer to silent."
         ).assertCountEquals(0)
-        compose.onNodeWithText("DND access").performClick()
+        compose.onNodeWithText("Settings").performClick()
+        compose.onNodeWithText("DND access").performScrollTo().performClick()
         compose.onNodeWithText(
             "Android requires this access before One Tap DND can change Do Not Disturb or set the ringer to silent."
         ).assertIsDisplayed()
@@ -81,9 +83,10 @@ class MainActivityUiTest {
         }
 
         compose.onAllNodesWithText("Black on white").assertCountEquals(0)
-        compose.onNodeWithText("App icon").performClick()
-        compose.onNodeWithText("Black on white").assertIsDisplayed().performClick()
-        compose.onNodeWithText("White on black").assertIsDisplayed()
+        compose.onNodeWithText("Settings").performClick()
+        compose.onNodeWithText("App icon").performScrollTo().performClick()
+        compose.onNodeWithText("Black on white").performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithText("White on black").performScrollTo().assertIsDisplayed()
         compose.runOnIdle { assertEquals(IconStyle.BLACK, selected) }
     }
 }

@@ -40,6 +40,8 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -251,6 +253,8 @@ fun SetupScreen(
     modifier: Modifier = Modifier,
     placesContent: @Composable () -> Unit = {}
 ) {
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    androidx.activity.compose.BackHandler(enabled = settingsOpen) { settingsOpen = false }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -273,61 +277,70 @@ fun SetupScreen(
             Text(
                 text = stringResource(R.string.setup_title),
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
             )
-        }
-
-        placesContent()
-
-        LocationPermissionsCard()
-        TimingPermissionCard()
-        StatusCard(
-            title = stringResource(R.string.dnd_access_title),
-            status = if (dndGranted) stringResource(R.string.allowed) else stringResource(R.string.action_required),
-            detail = stringResource(R.string.step1_description),
-            actionLabel = if (dndGranted) null else stringResource(R.string.grant_permission),
-            onAction = onGrantDnd
-        )
-        StatusCard(
-            title = stringResource(R.string.notifications_title),
-            status = if (notificationsGranted) stringResource(R.string.allowed) else stringResource(R.string.action_required),
-            detail = stringResource(R.string.notifications_description),
-            actionLabel = if (notificationsGranted || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) null
-                else stringResource(R.string.allow_notifications),
-            onAction = onGrantNotifications
-        )
-        StatusCard(
-            title = stringResource(R.string.quick_tile_title),
-            status = stringResource(R.string.quick_tile_status),
-            detail = stringResource(R.string.step2_description),
-            actionLabel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                stringResource(R.string.add_tile) else null,
-            onAction = onAddTile
-        )
-
-
-
-        CollapsibleCard(
-            title = stringResource(R.string.icon_style_title),
-            summary = stringResource(R.string.icon_style_summary),
-            detail = stringResource(R.string.icon_style_description)
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                IconStyleRow(
-                    label = stringResource(R.string.icon_black),
-                    style = IconStyle.BLACK,
-                    selected = selectedIcon == IconStyle.BLACK,
-                    onClick = { onIconStyleSelected(IconStyle.BLACK) }
-                )
-                IconStyleRow(
-                    label = stringResource(R.string.icon_white),
-                    style = IconStyle.WHITE,
-                    selected = selectedIcon == IconStyle.WHITE,
-                    onClick = { onIconStyleSelected(IconStyle.WHITE) }
-                )
+            TextButton(onClick = { settingsOpen = !settingsOpen }) {
+                Text(if (settingsOpen) "Done" else "Settings")
             }
         }
-        Spacer(Modifier.height(8.dp))
+
+        if (!settingsOpen) {
+            placesContent()
+        } else {
+            Text("Settings", style = MaterialTheme.typography.titleLarge)
+            AudioConnectionSettings()
+
+            LocationPermissionsCard()
+            TimingPermissionCard()
+            StatusCard(
+                title = stringResource(R.string.dnd_access_title),
+                status = if (dndGranted) stringResource(R.string.allowed) else stringResource(R.string.action_required),
+                detail = stringResource(R.string.step1_description),
+                actionLabel = if (dndGranted) null else stringResource(R.string.grant_permission),
+                onAction = onGrantDnd
+            )
+            StatusCard(
+                title = stringResource(R.string.notifications_title),
+                status = if (notificationsGranted) stringResource(R.string.allowed) else stringResource(R.string.action_required),
+                detail = stringResource(R.string.notifications_description),
+                actionLabel = if (notificationsGranted || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) null
+                    else stringResource(R.string.allow_notifications),
+                onAction = onGrantNotifications
+            )
+            StatusCard(
+                title = stringResource(R.string.quick_tile_title),
+                status = stringResource(R.string.quick_tile_status),
+                detail = stringResource(R.string.step2_description),
+                actionLabel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                    stringResource(R.string.add_tile) else null,
+                onAction = onAddTile
+            )
+
+
+
+            CollapsibleCard(
+                title = stringResource(R.string.icon_style_title),
+                summary = stringResource(R.string.icon_style_summary),
+                detail = stringResource(R.string.icon_style_description)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    IconStyleRow(
+                        label = stringResource(R.string.icon_black),
+                        style = IconStyle.BLACK,
+                        selected = selectedIcon == IconStyle.BLACK,
+                        onClick = { onIconStyleSelected(IconStyle.BLACK) }
+                    )
+                    IconStyleRow(
+                        label = stringResource(R.string.icon_white),
+                        style = IconStyle.WHITE,
+                        selected = selectedIcon == IconStyle.WHITE,
+                        onClick = { onIconStyleSelected(IconStyle.WHITE) }
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
     }
 }
 

@@ -73,7 +73,7 @@ object AdaptiveLocationChecks {
 
     private fun shouldRun(context: Context): Boolean {
         val store = PlaceStore(context)
-        return AutomationSettings(context).mode.usesLocation && !store.isPaused() &&
+        return AutomationSettings(context).locationChecksAllowed() && !store.isPaused() &&
             store.rules().any { it.enabled } &&
             DndController(context).hasAccess &&
             PlaceMonitoring.hasPreciseLocation(context) &&
@@ -98,7 +98,7 @@ class AdaptiveLocationWorker(context: Context, parameters: WorkerParameters) :
         val context = applicationContext
         val store = PlaceStore(context)
         val rules = store.rules().filter { it.enabled }
-        if (store.isPaused() || rules.isEmpty() ||
+        if (!AutomationSettings(context).locationChecksAllowed() || store.isPaused() || rules.isEmpty() ||
             !DndController(context).hasAccess ||
             !PlaceMonitoring.hasPreciseLocation(context) ||
             !PlaceMonitoring.hasBackgroundLocation(context) ||
@@ -140,11 +140,17 @@ class AdaptiveLocationWorker(context: Context, parameters: WorkerParameters) :
     private fun currentLocation(context: Context): Location? {
         val token = CancellationTokenSource()
         return try {
+            val settings = AutomationSettings(context)
+            val now = System.currentTimeMillis()
+            if (!settings.locationChecksAllowed(now)) return null
+            val duration = if (settings.mode == AutomationMode.HYBRID)
+                ((DailySchedule(settings.quietTimes).nextBoundary(now) ?: now) - now).coerceIn(1L, 20_000L)
+                else 20_000L
             val request = CurrentLocationRequest.Builder()
                 .setPriority(if (PlaceStore(context).state().inside.isNotEmpty()) Priority.PRIORITY_HIGH_ACCURACY
                     else Priority.PRIORITY_BALANCED_POWER_ACCURACY)
-                .setMaxUpdateAgeMillis(2L * 60L * 1_000L)
-                .setDurationMillis(20_000L)
+                .setMaxUpdateAgeMillis(if (settings.mode == AutomationMode.HYBRID) 0L else 2L * 60L * 1_000L)
+                .setDurationMillis(duration)
                 .build()
             Tasks.await(
                 LocationServices.getFusedLocationProviderClient(context)

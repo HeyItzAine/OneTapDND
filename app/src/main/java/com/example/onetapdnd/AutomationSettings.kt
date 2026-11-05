@@ -111,14 +111,29 @@ class AutomationSettings(private val context: Context) {
                 AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_BLE_HEADSET, AudioDeviceInfo.TYPE_HEARING_AID)
         }
 
+    fun locationChecksAllowed(now: Long = System.currentTimeMillis()): Boolean =
+        mode.usesLocation && (mode != AutomationMode.HYBRID ||
+            (enabled && DailySchedule(quietTimes).active(now)))
+
+    fun acceptsObservation(observedNanos: Long, now: Long = System.currentTimeMillis()): Boolean {
+        if (!locationChecksAllowed(now)) return false
+        if (mode != AutomationMode.HYBRID) return true
+        val start = quietTimes.filter { it.enabled }.flatMap { it.window.boundaries(now) }
+            .filter { (start, end) -> now >= start && now < end }.minOfOrNull { it.first } ?: return false
+        val ageMs = (android.os.SystemClock.elapsedRealtimeNanos() - observedNanos) / 1_000_000L
+        return observedNanos > 0L && ageMs >= 0L && now - ageMs >= start
+    }
+
     fun requestedAudioMode(now: Long = System.currentTimeMillis()): PlaceAudioMode? {
         val store = PlaceStore(context)
         if (store.isPaused() || !DndController(context).hasAccess) return null
-        val location = if (mode.usesLocation && PlaceMonitoring.hasPreciseLocation(context) &&
+        val time = mode.usesTime && enabled && DailySchedule(quietTimes).active(now)
+        if (mode == AutomationMode.HYBRID && !time) return null
+        val location = if (locationChecksAllowed(now) &&
+            (mode != AutomationMode.HYBRID || acceptsObservation(store.lastLocationObservationNanos(), now)) && PlaceMonitoring.hasPreciseLocation(context) &&
             PlaceMonitoring.hasBackgroundLocation(context) && PlaceMonitoring.locationEnabled(context))
             store.state().strongestMode(store.rules()) else null
-        val time = mode.usesTime && enabled && DailySchedule(quietTimes).active(now)
-        if (location == null && !time) return null
+        if (!automationActive(mode, time, location != null)) return null
         return if (profilesEnabled) profile(headphonesConnected()) else location ?: PlaceAudioMode.DND_ONLY
     }
 
@@ -140,6 +155,12 @@ class AutomationSettings(private val context: Context) {
 
 class AutomationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        MonitoringCoordinator(context).reconcile()
+        MonitoringCoordinator(context).onPlacesChanged()
     }
+}
+
+internal fun automationActive(mode: AutomationMode, time: Boolean, location: Boolean): Boolean = when (mode) {
+    AutomationMode.TIME -> time
+    AutomationMode.LOCATION -> location
+    AutomationMode.HYBRID -> time && location
 }

@@ -53,4 +53,33 @@ class QuietTimesTest {
             settings.preferences.edit().clear().commit()
         }
     }
+    @Test fun hybridOnlyAcceptsLocationDuringEnabledQuietWindows() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext.createDeviceProtectedStorageContext()
+        val settings = AutomationSettings(context)
+        settings.preferences.edit().clear().commit()
+        try {
+            val now = System.currentTimeMillis()
+            val minute = java.util.Calendar.getInstance().let {
+                it.get(java.util.Calendar.HOUR_OF_DAY) * 60 + it.get(java.util.Calendar.MINUTE)
+            }
+            settings.mode = AutomationMode.HYBRID
+            settings.enabled = true
+            settings.quietTimes = listOf(DailyQuietTime(window = DailyWindow((minute + 1439) % 1440, 3)))
+            assertTrue(settings.locationChecksAllowed(now))
+            assertTrue(settings.acceptsObservation(android.os.SystemClock.elapsedRealtimeNanos(), now))
+            assertFalse(settings.acceptsObservation(android.os.SystemClock.elapsedRealtimeNanos() - 300_000_000_000L, now))
+            settings.enabled = false
+            assertFalse(settings.locationChecksAllowed(now))
+            settings.enabled = true
+            settings.quietTimes = listOf(DailyQuietTime(window = DailyWindow((minute + 60) % 1440, 3)))
+            assertFalse(settings.locationChecksAllowed(now))
+            settings.mode = AutomationMode.LOCATION
+            assertTrue(settings.locationChecksAllowed(now))
+            settings.mode = AutomationMode.TIME
+            assertFalse(settings.locationChecksAllowed(now))
+        } finally {
+            settings.preferences.edit().clear().commit()
+        }
+    }
+
 }
